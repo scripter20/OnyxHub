@@ -1,4 +1,4 @@
---[[ MM2 Premium Utility v8.0 – полностью переработанный автофарм ]]
+--[[ MM2 Premium Utility v9.0 – максимально простой автофарм, без условий ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -149,53 +149,28 @@ local function StopNoclipHeartbeat()
     end
     ApplyNoclip(false)
 end
-
--- ===== СБРОС ФИЗИКИ =====
-local function ResetPhysics()
-    if not Character then return end
-    local hrp = Character:FindFirstChild("HumanoidRootPart")
-    if hrp then
-        hrp.Velocity = Vector3.new(0,0,0)
-        hrp.RotVelocity = Vector3.new(0,0,0)
-        hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
-        hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
-        hrp.CFrame = hrp.CFrame
-    end
-    for _, part in ipairs(Character:GetDescendants()) do
-        if part:IsA("BasePart") then
-            part.CanCollide = true
-            part.Massless = false
-            part.CustomPhysicalProperties = PhysicalProperties.new(1, 0.3, 0.5, true, 1)
-        end
-    end
-    local humanoid = Character:FindFirstChild("Humanoid")
-    if humanoid then
-        humanoid.PlatformStand = false
-        humanoid.UseJumpPower = true
-        humanoid.Sit = false
-        humanoid.AutoRotate = true
-        humanoid.MaxHealth = 100
-        humanoid.Health = 100
-        humanoid.WalkSpeed = State.WalkSpeed
-        humanoid.JumpPower = State.JumpPower
-        humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-        task.wait(0.05)
-        humanoid:ChangeState(Enum.HumanoidStateType.Running)
-    end
-end
--- ===== АВТОФАРМ (новая версия) =====
+-- ===== АВТОФАРМ (без остановок, без проверок) =====
 local function StartFarm()
     if State.FarmTask then return end
 
-    -- Включаем Noclip и режим полёта
-    local function EnableFlyMode()
-        if not Character then return end
-        local hrp = Character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            hrp.CanCollide = false
+    State.FarmTask = RunService.Heartbeat:Connect(function()
+        if not State.FarmActive then
+            return
         end
+
+        -- Проверяем наличие персонажа и HRP
+        if not Character or not Character:FindFirstChild("HumanoidRootPart") then
+            return
+        end
+
+        local hrp = Character.HumanoidRootPart
+
+        -- Принудительно включаем Noclip и облегчаем физику
+        hrp.CanCollide = false
+        hrp.Massless = true
+        hrp.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,false,0)
         for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
+            if part:IsA("BasePart") and part ~= hrp then
                 part.CanCollide = false
                 part.Massless = true
                 part.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,false,0)
@@ -208,45 +183,12 @@ local function StartFarm()
             humanoid.Sit = false
             humanoid.WalkSpeed = 0
         end
-    end
 
-    -- Отключаем режим полёта (восстанавливаем физику)
-    local function DisableFlyMode()
-        if not Character then return end
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = true
-                part.Massless = false
-                part.CustomPhysicalProperties = PhysicalProperties.new(1, 0.3, 0.5, true, 1)
-            end
-        end
-        local humanoid = Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = false
-            humanoid.UseJumpPower = true
-            humanoid.WalkSpeed = State.WalkSpeed
-        end
-    end
-
-    -- Основной цикл
-    State.FarmTask = RunService.Heartbeat:Connect(function()
-        if not State.FarmActive then
-            -- Если фарм выключен, выходим (но цикл продолжит работу, пока не отключим)
-            return
-        end
-
-        if not Character or not Character:FindFirstChild("HumanoidRootPart") then
-            return
-        end
-
-        local hrp = Character.HumanoidRootPart
-
-        -- Поиск ближайшей монеты
+        -- Поиск монеты
         local targetCoin = nil
         local closestDist = math.huge
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("BasePart") and (obj.Name:lower():find("coin") or obj.Name:lower():find("money")) then
-                -- Проверяем, что это действительно монета (есть ClickDetector или TouchInterest)
                 if (obj:FindFirstChild("ClickDetector") or obj:FindFirstChild("TouchInterest")) and obj.Parent and not obj.Parent:FindFirstChild("Humanoid") then
                     local dist = (hrp.Position - obj.Position).Magnitude
                     if dist < closestDist then
@@ -257,36 +199,28 @@ local function StartFarm()
             end
         end
 
-        -- Применяем режим полёта (включая Noclip)
-        EnableFlyMode()
-
         if targetCoin then
             local targetPos = targetCoin.Position + Vector3.new(0, 2, 0)
             local direction = (targetPos - hrp.Position).Unit
             local distance = (hrp.Position - targetPos).Magnitude
 
             if distance < 3 then
-                -- Остановка и сбор
                 hrp.Velocity = Vector3.new(0,0,0)
                 local detector = targetCoin:FindFirstChild("ClickDetector")
                 if detector then
                     fireclickdetector(detector)
                 end
-                -- Принудительно телепортируем на монету для надёжности
                 hrp.CFrame = CFrame.new(targetCoin.Position + Vector3.new(0,1,0))
             else
-                -- Летим к монете
                 hrp.Velocity = direction * State.FlySpeed
                 hrp.CFrame = CFrame.lookAt(hrp.Position, targetPos)
             end
         else
-            -- Монет нет – стоим на месте
             hrp.Velocity = Vector3.new(0,0,0)
         end
     end)
 end
-
--- ===== ANTI‑FLING =====
+-- ===== ANTI‑FLING (без изменений) =====
 local function SetCollisionForAllPlayers(enable)
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -382,7 +316,8 @@ local function StartAntiAFK()
         end
     end)
 end
--- ===== GUI =====
+
+-- ===== GUI (полностью как в v8, но убрал восстановление физики при выключении фарма) =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2Utility"
 ScreenGui.ResetOnSpawn = false
@@ -703,23 +638,7 @@ local _, yPosG = CreateToggleInPanel(GeneralPanel, "Auto Farm", "FarmActive", yP
     StartFarm()
 end, function()
     if State.FarmTask then State.FarmTask:Disconnect(); State.FarmTask = nil end
-    ResetPhysics()
-    -- Отключаем полётный режим
-    if Character then
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") then
-                part.CanCollide = true
-                part.Massless = false
-                part.CustomPhysicalProperties = PhysicalProperties.new(1, 0.3, 0.5, true, 1)
-            end
-        end
-        local humanoid = Character:FindFirstChild("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = false
-            humanoid.UseJumpPower = true
-            humanoid.WalkSpeed = State.WalkSpeed
-        end
-    end
+    -- Не восстанавливаем физику!
 end)
 local _, yPosG = CreateToggleInPanel(GeneralPanel, "ESP Wallhack", "ESPActive", yPosG, UpdateESP, function()
     for _, v in pairs(State.HighlightInstances) do v:Destroy() end
@@ -841,7 +760,6 @@ CloseBtn.MouseButton1Click:Connect(function()
     
     StopAntiFling()
     StopNoclipHeartbeat()
-    ResetPhysics()
     
     for _, conn in ipairs(State.Connections) do conn:Disconnect() end
     State.Connections = {}
@@ -885,4 +803,4 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
-print("[good]: MM2 Premium v8.0 – полностью переработанный автофарм загружен.")
+print("[good]: MM2 Premium v9.0 – максимально простой автофарм, без восстановления физики.")
