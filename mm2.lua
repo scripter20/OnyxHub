@@ -1,4 +1,4 @@
---[[ MM2 PutinHub v1.0 – часть 1 ]]
+--[[ MM2 PutinHub v1.1 – исправленный ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -16,14 +16,12 @@ local State = {
     Speed = 16,
     Jump = 50,
     NoClip = false,
-    InfJump = false,
     FarmTask = nil,
     AntiAFKTask = nil,
     AntiFlingConn = {},
     ESPHighlights = {},
     ESPNames = {},
     NoClipConn = nil,
-    InfJumpConn = nil,
 }
 
 -- === Роли ===
@@ -135,24 +133,6 @@ local function StopNoClip()
     ApplyNoClip(false)
 end
 
--- === INFINITE JUMP ===
-local function StartInfJump()
-    if State.InfJumpConn then return end
-    State.InfJumpConn = UserInputService.InputBegan:Connect(function(input, gp)
-        if gp then return end
-        if input.KeyCode == Enum.KeyCode.Space and State.InfJump then
-            local hum = Character and Character:FindFirstChild("Humanoid")
-            if hum and hum.Health > 0 then
-                hum:ChangeState(Enum.HumanoidStateType.Jumping)
-            end
-        end
-    end)
-end
-
-local function StopInfJump()
-    if State.InfJumpConn then State.InfJumpConn:Disconnect(); State.InfJumpConn = nil end
-end
-
 -- === ANTI‑FLING ===
 local function SetCollisionAll(enable)
     for _, p in ipairs(Players:GetPlayers()) do
@@ -238,7 +218,7 @@ local function StopAntiAFK()
     State.AntiAFK = false
     if State.AntiAFKTask then task.cancel(State.AntiAFKTask); State.AntiAFKTask = nil end
 end
---[[ MM2 PutinHub v1.0 – часть 2 (AutoFarm + Teleport) ]]
+--[[ MM2 PutinHub v1.1 – часть 2 ]]
 
 -- === AUTOFARM ===
 local farmTask = nil
@@ -252,7 +232,7 @@ local function StartFarm()
 
         local hrp = Character.HumanoidRootPart
 
-        -- Включаем ноклип для фарма
+        -- Noclip для фарма
         hrp.CanCollide = false
         hrp.Massless = true
         hrp.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,false,0)
@@ -308,50 +288,52 @@ end
 
 local function StopFarm()
     if farmTask then farmTask:Disconnect(); farmTask = nil end
-    -- Не восстанавливаем физику, чтобы сохранить ноклип (но можно оставить как есть)
 end
 
 -- === TELEPORT FUNCTIONS ===
+local function SafeTeleport(targetCFrame)
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+    Character.HumanoidRootPart.CFrame = targetCFrame
+end
+
 local function TpToLobby()
-    -- В MM2 лобби обычно находится по координатам, но лучше искать спавн-точку
-    local lobby = Workspace:FindFirstChild("Lobby") or Workspace:FindFirstChild("SpawnLocation")
+    local lobby = Workspace:FindFirstChild("SpawnLocation") or Workspace:FindFirstChild("Lobby")
     if lobby and lobby:IsA("BasePart") then
-        LocalPlayer.Character.HumanoidRootPart.CFrame = lobby.CFrame + Vector3.new(0,2,0)
+        SafeTeleport(lobby.CFrame + Vector3.new(0,2,0))
     else
-        warn("Lobby not found")
+        SafeTeleport(CFrame.new(0,10,0)) -- запасной вариант
     end
 end
 
 local function TpToMap()
-    -- Просто телепортируем на центр карты (можно найти любой BasePart с именем "Map")
-    local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("Terrain")
+    local map = Workspace:FindFirstChild("Map") or Workspace:FindFirstChild("Terrain") or Workspace:FindFirstChild("Baseplate")
     if map and map:IsA("BasePart") then
-        LocalPlayer.Character.HumanoidRootPart.CFrame = map.CFrame + Vector3.new(0,5,0)
+        SafeTeleport(map.CFrame + Vector3.new(0,5,0))
     else
-        warn("Map not found")
+        SafeTeleport(CFrame.new(0,20,0))
     end
 end
 
 local function TpToMurder()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and IsMurderer(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0,2,0)
+            SafeTeleport(p.Character.HumanoidRootPart.CFrame + Vector3.new(0,2,0))
             return
         end
     end
-    warn("No murderer found")
+    warn("Murderer not found")
 end
 
 local function TpToSheriff()
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and IsSheriff(p) and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
-            LocalPlayer.Character.HumanoidRootPart.CFrame = p.Character.HumanoidRootPart.CFrame + Vector3.new(0,2,0)
+            SafeTeleport(p.Character.HumanoidRootPart.CFrame + Vector3.new(0,2,0))
             return
         end
     end
-    warn("No sheriff found")
+    warn("Sheriff not found")
 end
---[[ MM2 PutinHub v1.0 – часть 3 (GUI) ]]
+--[[ MM2 PutinHub v1.1 – часть 3 (GUI) ]]
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PutinHub"
@@ -359,8 +341,8 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 400, 0, 540)
-MainFrame.Position = UDim2.new(0.5, -200, 0.5, -270)
+MainFrame.Size = UDim2.new(0, 360, 0, 420) -- уменьшил высоту
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -210)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
 MainFrame.BackgroundTransparency = 0.15
 MainFrame.BorderSizePixel = 0
@@ -377,7 +359,7 @@ UIStroke.Thickness = 2
 UIStroke.Transparency = 0.2
 UIStroke.Parent = MainFrame
 
--- Фоновое изображение (опционально, можно оставить флаг)
+-- Фоновое изображение
 local Bg = Instance.new("ImageLabel")
 Bg.Size = UDim2.new(1,0,1,0)
 Bg.BackgroundTransparency = 1
@@ -389,39 +371,40 @@ Bg.Parent = MainFrame
 
 -- Заголовок
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -80, 0, 40)
+Title.Size = UDim2.new(1, -80, 0, 35)
 Title.Position = UDim2.new(0, 10, 0, 5)
 Title.BackgroundTransparency = 1
 Title.Text = "MM2 PutinHub"
 Title.TextColor3 = Color3.fromRGB(68, 255, 136)
-Title.TextSize = 24
+Title.TextSize = 22
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
 -- Кнопка Hide
 local HideBtn = Instance.new("TextButton")
-HideBtn.Size = UDim2.new(0, 32, 0, 32)
-HideBtn.Position = UDim2.new(1, -78, 0, 4)
+HideBtn.Size = UDim2.new(0, 30, 0, 30)
+HideBtn.Position = UDim2.new(1, -72, 0, 4)
 HideBtn.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
 HideBtn.BackgroundTransparency = 0.5
 HideBtn.Text = "−"
 HideBtn.TextColor3 = Color3.fromRGB(200, 255, 200)
-HideBtn.TextSize = 24
+HideBtn.TextSize = 22
 HideBtn.Font = Enum.Font.GothamBold
 HideBtn.Parent = MainFrame
 local HCorner = Instance.new("UICorner")
 HCorner.CornerRadius = UDim.new(0, 8)
 HCorner.Parent = HideBtn
 
+-- Кнопка Close
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 32, 0, 32)
-CloseBtn.Position = UDim2.new(1, -38, 0, 4)
+CloseBtn.Size = UDim2.new(0, 30, 0, 30)
+CloseBtn.Position = UDim2.new(1, -36, 0, 4)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
 CloseBtn.BackgroundTransparency = 0.5
 CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-CloseBtn.TextSize = 18
+CloseBtn.TextSize = 16
 CloseBtn.Font = Enum.Font.GothamBold
 CloseBtn.Parent = MainFrame
 local CCorn = Instance.new("UICorner")
@@ -430,8 +413,8 @@ CCorn.Parent = CloseBtn
 
 -- Вкладки
 local Tabs = Instance.new("Frame")
-Tabs.Size = UDim2.new(1, -20, 0, 40)
-Tabs.Position = UDim2.new(0, 10, 0, 50)
+Tabs.Size = UDim2.new(1, -20, 0, 36)
+Tabs.Position = UDim2.new(0, 10, 0, 45)
 Tabs.BackgroundTransparency = 1
 Tabs.Parent = MainFrame
 
@@ -442,7 +425,7 @@ TabGen.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
 TabGen.BackgroundTransparency = 0.3
 TabGen.Text = "General"
 TabGen.TextColor3 = Color3.fromRGB(200, 255, 200)
-TabGen.TextSize = 16
+TabGen.TextSize = 14
 TabGen.Font = Enum.Font.GothamBold
 TabGen.Parent = Tabs
 local TCorner1 = Instance.new("UICorner")
@@ -456,7 +439,7 @@ TabPlayer.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
 TabPlayer.BackgroundTransparency = 0.3
 TabPlayer.Text = "Player"
 TabPlayer.TextColor3 = Color3.fromRGB(200, 255, 200)
-TabPlayer.TextSize = 16
+TabPlayer.TextSize = 14
 TabPlayer.Font = Enum.Font.GothamBold
 TabPlayer.Parent = Tabs
 local TCorner2 = Instance.new("UICorner")
@@ -470,7 +453,7 @@ TabTeleport.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
 TabTeleport.BackgroundTransparency = 0.3
 TabTeleport.Text = "Teleport"
 TabTeleport.TextColor3 = Color3.fromRGB(200, 255, 200)
-TabTeleport.TextSize = 16
+TabTeleport.TextSize = 14
 TabTeleport.Font = Enum.Font.GothamBold
 TabTeleport.Parent = Tabs
 local TCorner3 = Instance.new("UICorner")
@@ -479,16 +462,16 @@ TCorner3.Parent = TabTeleport
 
 -- ScrollingFrame
 local Scroll = Instance.new("ScrollingFrame")
-Scroll.Size = UDim2.new(1, 0, 1, -100)
-Scroll.Position = UDim2.new(0, 0, 0, 100)
+Scroll.Size = UDim2.new(1, 0, 1, -95)
+Scroll.Position = UDim2.new(0, 0, 0, 90)
 Scroll.BackgroundTransparency = 1
 Scroll.BorderSizePixel = 0
 Scroll.CanvasSize = UDim2.new(0,0,0,0)
-Scroll.ScrollBarThickness = 6
+Scroll.ScrollBarThickness = 5
 Scroll.ScrollBarImageColor3 = Color3.fromRGB(68, 255, 136)
 Scroll.Parent = MainFrame
 
--- Контейнеры для каждой вкладки
+-- Контейнеры для вкладок
 local GenPanel = Instance.new("Frame")
 GenPanel.Size = UDim2.new(1,0,0,0)
 GenPanel.BackgroundTransparency = 1
@@ -517,31 +500,31 @@ local function UpdateCanvas()
     Scroll.CanvasSize = UDim2.new(0,0,0,math.max(h1,h2,h3)+20)
 end
 
--- Функции создания элементов (переключатели и ползунки)
+-- Функции создания элементов
 local function CreateToggle(panel, label, stateKey, yPos, onFunc, offFunc)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1,-20,0,30)
+    f.Size = UDim2.new(1,-20,0,28)
     f.Position = UDim2.new(0,10,0,yPos)
     f.BackgroundTransparency = 1
     f.Parent = panel
 
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(0,160,1,0)
+    l.Size = UDim2.new(0,150,1,0)
     l.BackgroundTransparency = 1
     l.Text = label
     l.TextColor3 = Color3.fromRGB(200,255,200)
-    l.TextSize = 14
+    l.TextSize = 13
     l.Font = Enum.Font.Gotham
     l.TextXAlignment = Enum.TextXAlignment.Left
     l.Parent = f
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0,60,0,24)
-    btn.Position = UDim2.new(1,-70,0.5,-12)
+    btn.Size = UDim2.new(0,55,0,22)
+    btn.Position = UDim2.new(1,-65,0.5,-11)
     btn.BackgroundColor3 = Color3.fromRGB(200,50,50)
     btn.Text = "OFF"
     btn.TextColor3 = Color3.fromRGB(255,255,255)
-    btn.TextSize = 12
+    btn.TextSize = 11
     btn.Font = Enum.Font.GothamBold
     btn.Parent = f
     local bc = Instance.new("UICorner")
@@ -560,30 +543,30 @@ local function CreateToggle(panel, label, stateKey, yPos, onFunc, offFunc)
             if offFunc then offFunc() end
         end
     end)
-    return f, yPos+35
+    return f, yPos+33
 end
 
 local function CreateSlider(panel, label, minVal, maxVal, step, stateKey, format, yPos, applyFunc)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1,-20,0,50)
+    f.Size = UDim2.new(1,-20,0,45)
     f.Position = UDim2.new(0,10,0,yPos)
     f.BackgroundTransparency = 1
     f.Parent = panel
 
     local l = Instance.new("TextLabel")
-    l.Size = UDim2.new(1,0,0,20)
+    l.Size = UDim2.new(1,0,0,18)
     l.Position = UDim2.new(0,0,0,0)
     l.BackgroundTransparency = 1
     l.Text = label .. ": " .. string.format(format or "%.1f", State[stateKey])
     l.TextColor3 = Color3.fromRGB(200,255,200)
-    l.TextSize = 14
+    l.TextSize = 13
     l.Font = Enum.Font.Gotham
     l.TextXAlignment = Enum.TextXAlignment.Left
     l.Parent = f
 
     local bg = Instance.new("Frame")
-    bg.Size = UDim2.new(1,0,0,6)
-    bg.Position = UDim2.new(0,0,0,25)
+    bg.Size = UDim2.new(1,0,0,5)
+    bg.Position = UDim2.new(0,0,0,22)
     bg.BackgroundColor3 = Color3.fromRGB(50,70,50)
     bg.BorderSizePixel = 0
     bg.Parent = f
@@ -601,8 +584,8 @@ local function CreateSlider(panel, label, minVal, maxVal, step, stateKey, format
     fc.Parent = fill
 
     local thumb = Instance.new("TextButton")
-    thumb.Size = UDim2.new(0,18,0,18)
-    thumb.Position = UDim2.new(0,-9,0.5,-9)
+    thumb.Size = UDim2.new(0,16,0,16)
+    thumb.Position = UDim2.new(0,-8,0.5,-8)
     thumb.BackgroundColor3 = Color3.fromRGB(200,255,200)
     thumb.Text = ""
     thumb.BorderSizePixel = 0
@@ -617,7 +600,7 @@ local function CreateSlider(panel, label, minVal, maxVal, step, stateKey, format
         local rounded = math.round(clamped/step)*step
         State[stateKey] = rounded
         local ratio = (rounded-minVal)/(maxVal-minVal)
-        thumb.Position = UDim2.new(ratio, -9, 0.5, -9)
+        thumb.Position = UDim2.new(ratio, -8, 0.5, -8)
         fill.Size = UDim2.new(ratio, 0, 1, 0)
         l.Text = label .. ": " .. string.format(format or "%.1f", rounded)
         if applyFunc then applyFunc(rounded) end
@@ -657,15 +640,15 @@ local function CreateSlider(panel, label, minVal, maxVal, step, stateKey, format
             end
         end
     end)
-    return f, yPos+60
+    return f, yPos+55
 end
 
 -- Заполняем General
 local yG = 10
-local _, yG = CreateToggle(GenPanel, "Auto Farm", "Farm", yG, function() StartFarm() end, function() StopFarm() end)
-local _, yG = CreateToggle(GenPanel, "Anti-Fling", "AntiFling", yG, function() StartAntiFling() end, function() StopAntiFling() end)
-local _, yG = CreateToggle(GenPanel, "Anti-AFK", "AntiAFK", yG, function() StartAntiAFK() end, function() StopAntiAFK() end)
-local _, yG = CreateToggle(GenPanel, "ESP", "ESP", yG, function() UpdateESP() end, function()
+local _, yG = CreateToggle(GenPanel, "Auto Farm", "Farm", yG, StartFarm, StopFarm)
+local _, yG = CreateToggle(GenPanel, "Anti-Fling", "AntiFling", yG, StartAntiFling, StopAntiFling)
+local _, yG = CreateToggle(GenPanel, "Anti-AFK", "AntiAFK", yG, StartAntiAFK, StopAntiAFK)
+local _, yG = CreateToggle(GenPanel, "ESP", "ESP", yG, UpdateESP, function()
     for _,v in pairs(State.ESPHighlights) do v:Destroy() end
     for _,v in pairs(State.ESPNames) do v:Destroy() end
     State.ESPHighlights = {}
@@ -680,14 +663,13 @@ end)
 local _, yP = CreateSlider(PlayerPanel, "Jump", 0, 200, 1, "Jump", "%.0f", yP, function(val)
     if Character and Character:FindFirstChild("Humanoid") then Character.Humanoid.JumpPower = val end
 end)
-local _, yP = CreateToggle(PlayerPanel, "NoClip", "NoClip", yP, function() StartNoClip() end, function() StopNoClip() end)
-local _, yP = CreateToggle(PlayerPanel, "InfJump", "InfJump", yP, function() StartInfJump() end, function() StopInfJump() end)
+local _, yP = CreateToggle(PlayerPanel, "NoClip", "NoClip", yP, StartNoClip, StopNoClip)
 
 -- Заполняем Teleport
 local yT = 10
 local function TeleportButton(panel, label, func, yPos)
     local f = Instance.new("Frame")
-    f.Size = UDim2.new(1,-20,0,30)
+    f.Size = UDim2.new(1,-20,0,28)
     f.Position = UDim2.new(0,10,0,yPos)
     f.BackgroundTransparency = 1
     f.Parent = panel
@@ -698,7 +680,7 @@ local function TeleportButton(panel, label, func, yPos)
     btn.BackgroundTransparency = 0.3
     btn.Text = label
     btn.TextColor3 = Color3.fromRGB(200,255,200)
-    btn.TextSize = 16
+    btn.TextSize = 14
     btn.Font = Enum.Font.GothamBold
     btn.Parent = f
     local bc = Instance.new("UICorner")
@@ -706,7 +688,7 @@ local function TeleportButton(panel, label, func, yPos)
     bc.Parent = btn
 
     btn.MouseButton1Click:Connect(func)
-    return f, yPos+35
+    return f, yPos+33
 end
 
 local _, yT = TeleportButton(TeleportPanel, "TP to Lobby", TpToLobby, yT)
@@ -754,7 +736,7 @@ TabPlayer.MouseButton1Click:Connect(function() ShowTab("Player") end)
 TabTeleport.MouseButton1Click:Connect(function() ShowTab("Teleport") end)
 ShowTab("General")
 
--- Кнопка Show (плавающая)
+-- Плавающая кнопка Show
 local ShowGui = Instance.new("ScreenGui")
 ShowGui.Name = "ShowButton"
 ShowGui.ResetOnSpawn = false
@@ -762,13 +744,13 @@ ShowGui.Enabled = false
 ShowGui.Parent = PlayerGui
 
 local ShowBtn = Instance.new("TextButton")
-ShowBtn.Size = UDim2.new(0,50,0,50)
-ShowBtn.Position = UDim2.new(0.9,-25,0.9,-25)
+ShowBtn.Size = UDim2.new(0,45,0,45)
+ShowBtn.Position = UDim2.new(0.9,-22,0.9,-22)
 ShowBtn.BackgroundColor3 = Color3.fromRGB(40,40,50)
 ShowBtn.BackgroundTransparency = 0.2
 ShowBtn.Text = "M"
 ShowBtn.TextColor3 = Color3.fromRGB(68,255,136)
-ShowBtn.TextSize = 28
+ShowBtn.TextSize = 26
 ShowBtn.Font = Enum.Font.GothamBold
 ShowBtn.Parent = ShowGui
 local SC = Instance.new("UICorner")
@@ -804,12 +786,10 @@ CloseBtn.MouseButton1Click:Connect(function()
     State.AntiAFK = false
     State.ESP = false
     State.NoClip = false
-    State.InfJump = false
     StopFarm()
     StopAntiFling()
     StopAntiAFK()
     StopNoClip()
-    StopInfJump()
     for _,v in pairs(State.ESPHighlights) do v:Destroy() end
     for _,v in pairs(State.ESPNames) do v:Destroy() end
     ScreenGui:Destroy()
@@ -832,7 +812,6 @@ LocalPlayer.CharacterAdded:Connect(function(c)
         Character.Humanoid.JumpPower = State.Jump
     end
     if State.NoClip then StartNoClip() end
-    if State.InfJump then StartInfJump() end
     if State.Farm then
         if farmTask then farmTask:Disconnect() end
         StartFarm()
@@ -844,4 +823,4 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     end
 end)
 
-print("[good]: MM2 PutinHub v1.0 загружен.")
+print("[good]: MM2 PutinHub v1.1 – исправлен, компактный, телепорты работают.")
