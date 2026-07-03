@@ -1,4 +1,4 @@
---[[ MM2 Premium Utility v5.1 – WalkSpeed, автофарм по раундам ]]
+--[[ MM2 Premium Utility v6.0 – зелёная тема, вкладки Player/General ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -15,14 +15,18 @@ local State = {
     AntiFlingActive = false,
     AntiAFKActive = false,
     GUIHidden = false,
-    WalkSpeed = 16,      -- по умолчанию (стандартная скорость)
+    WalkSpeed = 16,
     JumpPower = 50,
+    Noclip = false,
+    InfiniteJump = false,
     Connections = {},
     HighlightInstances = {},
     NameTags = {},
     FarmTask = nil,
     AntiAFKTask = nil,
     AntiFlingConnections = {},
+    InfiniteJumpConnection = nil,
+    OriginalJumpPower = 50,
 }
 
 -- ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
@@ -121,6 +125,47 @@ local function UpdateESP()
     end
 end
 
+-- ===== NOCLIP =====
+local function SetNoclip(state)
+    if not Character then return end
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not state
+        end
+    end
+end
+
+-- ===== INFINITE JUMP =====
+local function SetupInfiniteJump(enable)
+    if enable then
+        if State.InfiniteJumpConnection then return end
+        State.OriginalJumpPower = State.JumpPower
+        -- Сохраняем оригинальный JumpPower
+        if Character and Character:FindFirstChild("Humanoid") then
+            State.OriginalJumpPower = Character.Humanoid.JumpPower
+            Character.Humanoid.JumpPower = 9999
+        end
+        -- Подписываемся на нажатие пробела
+        State.InfiniteJumpConnection = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if input.KeyCode == Enum.KeyCode.Space and State.InfiniteJump then
+                local humanoid = Character and Character:FindFirstChild("Humanoid")
+                if humanoid and humanoid.Health > 0 then
+                    humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                end
+            end
+        end)
+    else
+        if State.InfiniteJumpConnection then
+            State.InfiniteJumpConnection:Disconnect()
+            State.InfiniteJumpConnection = nil
+        end
+        if Character and Character:FindFirstChild("Humanoid") then
+            Character.Humanoid.JumpPower = State.OriginalJumpPower
+        end
+    end
+end
+
 -- ===== СБРОС ФИЗИКИ =====
 local function ResetPhysics()
     if not Character then return end
@@ -147,14 +192,15 @@ local function ResetPhysics()
         humanoid.AutoRotate = true
         humanoid.MaxHealth = 100
         humanoid.Health = 100
-        humanoid.WalkSpeed = State.WalkSpeed  -- применяем текущую скорость
+        humanoid.WalkSpeed = State.WalkSpeed
+        humanoid.JumpPower = State.JumpPower
         humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         task.wait(0.05)
         humanoid:ChangeState(Enum.HumanoidStateType.Running)
     end
 end
 
--- ===== AUTO FARM (с фиксированной скоростью полёта 22) =====
+-- ===== AUTO FARM (только по кнопке) =====
 local function StartFarm()
     if State.FarmTask then return end
 
@@ -174,7 +220,7 @@ local function StartFarm()
             humanoid.PlatformStand = state
             humanoid.UseJumpPower = not state
             humanoid.Sit = false
-            humanoid.WalkSpeed = State.WalkSpeed  -- сохраняем скорость ходьбы
+            humanoid.WalkSpeed = State.WalkSpeed
         end
         for _, part in ipairs(Character:GetDescendants()) do
             if part:IsA("BasePart") then
@@ -195,21 +241,15 @@ local function StartFarm()
         if not State.FarmActive then return end
         if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
         local humanoid = Character:FindFirstChild("Humanoid")
-        if not humanoid or humanoid.Health <= 0 then
-            -- персонаж мёртв – ничего не делаем
-            return
-        end
+        if not humanoid or humanoid.Health <= 0 then return end
 
         local hrp = Character.HumanoidRootPart
 
-        -- Ищем монеты
         local targetCoin = nil
         local closestDist = math.huge
-        local foundAny = false
         for _, obj in ipairs(Workspace:GetDescendants()) do
             if obj:IsA("BasePart") and (obj.Name:lower():find("coin") or obj.Name:lower():find("money")) then
                 if (obj:FindFirstChild("ClickDetector") or obj:FindFirstChild("TouchInterest")) and obj.Parent and not obj.Parent:FindFirstChild("Humanoid") then
-                    foundAny = true
                     local dist = (hrp.Position - obj.Position).Magnitude
                     if dist < closestDist then
                         closestDist = dist
@@ -230,12 +270,10 @@ local function StartFarm()
                 if detector then fireclickdetector(detector) end
                 hrp.CFrame = CFrame.new(targetCoin.Position + Vector3.new(0,1,0))
             else
-                -- фиксированная скорость 22
                 hrp.Velocity = direction * 22
                 hrp.CFrame = CFrame.lookAt(hrp.Position, targetPos)
             end
         else
-            -- нет монет – стоим на месте
             hrp.Velocity = Vector3.new(0,0,0)
         end
 
@@ -340,80 +378,77 @@ local function StartAntiAFK()
         end
     end)
 end
---[[ MM2 Premium Utility v5.1 – часть 2 (GUI с ползунками для WalkSpeed и JumpPower) ]]
--- ===== GUI =====
+--[[ MM2 Premium Utility v6.0 – часть 2 (GUI с вкладками) ]]
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2Utility"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
+-- Основное окно
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 320, 0, 420)
-MainFrame.Position = UDim2.new(0.5, -160, 0.5, -210)
-MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
-MainFrame.BackgroundTransparency = 0.15
+MainFrame.Size = UDim2.new(0, 360, 0, 480)
+MainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 40, 25) -- тёмно-зелёный
+MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
--- Фоновое изображение (флаг Казахстана)
+-- Скругление и тень (тень через дополнительный кастом, но для простоты используем UIStroke)
+local UICorner = Instance.new("UICorner")
+UICorner.CornerRadius = UDim.new(0, 16)
+UICorner.Parent = MainFrame
+
+local UIStroke = Instance.new("UIStroke")
+UIStroke.Color = Color3.fromRGB(68, 255, 136) -- ярко-зелёный
+UIStroke.Thickness = 2
+UIStroke.Transparency = 0.3
+UIStroke.Parent = MainFrame
+
+-- Фоновое изображение (флаг Казахстана – оставлю, но можно убрать)
 local BackgroundImage = Instance.new("ImageLabel")
 BackgroundImage.Size = UDim2.new(1, 0, 1, 0)
 BackgroundImage.Position = UDim2.new(0, 0, 0, 0)
 BackgroundImage.BackgroundTransparency = 1
 BackgroundImage.Image = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Flag_of_Kazakhstan.svg/1280px-Flag_of_Kazakhstan.svg.png"
 BackgroundImage.ScaleType = Enum.ScaleType.Fit
-BackgroundImage.ImageTransparency = 0.25
+BackgroundImage.ImageTransparency = 0.85 -- почти прозрачный, чтобы не мешать
 BackgroundImage.ZIndex = 0
 BackgroundImage.Parent = MainFrame
 
-local FallbackText = Instance.new("TextLabel")
-FallbackText.Size = UDim2.new(1, 0, 1, 0)
-FallbackText.Position = UDim2.new(0, 0, 0, 0)
-FallbackText.BackgroundTransparency = 1
-FallbackText.Text = "ҚАЗАҚСТАН"
-FallbackText.TextColor3 = Color3.fromRGB(0, 150, 255)
-FallbackText.TextSize = 40
-FallbackText.Font = Enum.Font.GothamBold
-FallbackText.TextTransparency = 0.6
-FallbackText.ZIndex = 0
-FallbackText.Parent = MainFrame
-
-local UICorner = Instance.new("UICorner")
-UICorner.CornerRadius = UDim.new(0, 12)
-UICorner.Parent = MainFrame
-
--- Заголовок и кнопки
+-- Заголовок
 local Title = Instance.new("TextLabel")
-Title.Size = UDim2.new(1, -80, 0, 30)
+Title.Size = UDim2.new(1, -80, 0, 35)
 Title.Position = UDim2.new(0, 10, 0, 5)
 Title.BackgroundTransparency = 1
 Title.Text = "MM2 Premium"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.TextSize = 16
+Title.TextColor3 = Color3.fromRGB(68, 255, 136) -- ярко-зелёный
+Title.TextSize = 20
 Title.Font = Enum.Font.GothamBold
 Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.Parent = MainFrame
 
+-- Кнопка Hide
 local HideBtn = Instance.new("TextButton")
-HideBtn.Size = UDim2.new(0, 30, 0, 30)
-HideBtn.Position = UDim2.new(1, -75, 0, 0)
-HideBtn.BackgroundColor3 = Color3.fromRGB(200, 200, 200)
-HideBtn.BackgroundTransparency = 0.3
+HideBtn.Size = UDim2.new(0, 32, 0, 32)
+HideBtn.Position = UDim2.new(1, -78, 0, 4)
+HideBtn.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
+HideBtn.BackgroundTransparency = 0.5
 HideBtn.Text = "−"
-HideBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-HideBtn.TextSize = 22
+HideBtn.TextColor3 = Color3.fromRGB(200, 255, 200)
+HideBtn.TextSize = 24
 HideBtn.Font = Enum.Font.GothamBold
 HideBtn.Parent = MainFrame
 local HideCorner = Instance.new("UICorner")
 HideCorner.CornerRadius = UDim.new(0, 8)
 HideCorner.Parent = HideBtn
 
+-- Кнопка Close
 local CloseBtn = Instance.new("TextButton")
-CloseBtn.Size = UDim2.new(0, 30, 0, 30)
-CloseBtn.Position = UDim2.new(1, -35, 0, 0)
+CloseBtn.Size = UDim2.new(0, 32, 0, 32)
+CloseBtn.Position = UDim2.new(1, -38, 0, 4)
 CloseBtn.BackgroundColor3 = Color3.fromRGB(200, 40, 40)
-CloseBtn.BackgroundTransparency = 0.3
+CloseBtn.BackgroundTransparency = 0.5
 CloseBtn.Text = "✕"
 CloseBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
 CloseBtn.TextSize = 18
@@ -423,108 +458,106 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseBtn
 
--- ScrollingFrame
+-- Панель вкладок (кнопки переключения)
+local TabsFrame = Instance.new("Frame")
+TabsFrame.Size = UDim2.new(1, -20, 0, 40)
+TabsFrame.Position = UDim2.new(0, 10, 0, 45)
+TabsFrame.BackgroundTransparency = 1
+TabsFrame.Parent = MainFrame
+
+local TabPlayer = Instance.new("TextButton")
+TabPlayer.Size = UDim2.new(0.5, -5, 1, 0)
+TabPlayer.Position = UDim2.new(0, 0, 0, 0)
+TabPlayer.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
+TabPlayer.BackgroundTransparency = 0.3
+TabPlayer.Text = "Player"
+TabPlayer.TextColor3 = Color3.fromRGB(200, 255, 200)
+TabPlayer.TextSize = 16
+TabPlayer.Font = Enum.Font.GothamBold
+TabPlayer.Parent = TabsFrame
+local TabCorner1 = Instance.new("UICorner")
+TabCorner1.CornerRadius = UDim.new(0, 8)
+TabCorner1.Parent = TabPlayer
+
+local TabGeneral = Instance.new("TextButton")
+TabGeneral.Size = UDim2.new(0.5, -5, 1, 0)
+TabGeneral.Position = UDim2.new(0.5, 5, 0, 0)
+TabGeneral.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
+TabGeneral.BackgroundTransparency = 0.3
+TabGeneral.Text = "General"
+TabGeneral.TextColor3 = Color3.fromRGB(200, 255, 200)
+TabGeneral.TextSize = 16
+TabGeneral.Font = Enum.Font.GothamBold
+TabGeneral.Parent = TabsFrame
+local TabCorner2 = Instance.new("UICorner")
+TabCorner2.CornerRadius = UDim.new(0, 8)
+TabCorner2.Parent = TabGeneral
+
+-- Контейнер для содержимого вкладок (ScrollingFrame)
 local ScrollFrame = Instance.new("ScrollingFrame")
-ScrollFrame.Size = UDim2.new(1, 0, 1, -35)
-ScrollFrame.Position = UDim2.new(0, 0, 0, 35)
+ScrollFrame.Size = UDim2.new(1, 0, 1, -90)
+ScrollFrame.Position = UDim2.new(0, 0, 0, 90)
 ScrollFrame.BackgroundTransparency = 1
 ScrollFrame.BorderSizePixel = 0
 ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
 ScrollFrame.ScrollBarThickness = 6
-ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(100, 100, 100)
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(68, 255, 136)
 ScrollFrame.Parent = MainFrame
 
-local Content = Instance.new("Frame")
-Content.Size = UDim2.new(1, 0, 0, 0)
-Content.BackgroundTransparency = 1
-Content.Parent = ScrollFrame
+-- Две панели для каждой вкладки (будут находиться внутри ScrollFrame)
+local PlayerPanel = Instance.new("Frame")
+PlayerPanel.Size = UDim2.new(1, 0, 0, 0)
+PlayerPanel.BackgroundTransparency = 1
+PlayerPanel.Parent = ScrollFrame
 
-local yPos = 10
+local GeneralPanel = Instance.new("Frame")
+GeneralPanel.Size = UDim2.new(1, 0, 0, 0)
+GeneralPanel.BackgroundTransparency = 1
+GeneralPanel.Parent = ScrollFrame
+GeneralPanel.Visible = false
 
--- Функция создания переключателей
-local function CreateToggle(name, label, stateVar)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 30)
-    frame.Position = UDim2.new(0, 10, 0, yPos)
-    frame.BackgroundTransparency = 1
-    frame.Parent = Content
-    
-    local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(0, 120, 1, 0)
-    lbl.BackgroundTransparency = 1
-    lbl.Text = label
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 220)
-    lbl.TextSize = 14
-    lbl.Font = Enum.Font.Gotham
-    lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = frame
-    
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 60, 0, 24)
-    btn.Position = UDim2.new(1, -70, 0.5, -12)
-    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-    btn.Text = "OFF"
-    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 12
-    btn.Font = Enum.Font.GothamBold
-    btn.Parent = frame
-    local btnCorner = Instance.new("UICorner")
-    btnCorner.CornerRadius = UDim.new(0, 6)
-    btnCorner.Parent = btn
-    
-    btn.MouseButton1Click:Connect(function()
-        State[stateVar] = not State[stateVar]
-        if State[stateVar] then
-            btn.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-            btn.Text = "ON"
-            if stateVar == "FarmActive" then StartFarm() end
-            if stateVar == "ESPActive" then UpdateESP() end
-            if stateVar == "AntiFlingActive" then StartAntiFling() end
-            if stateVar == "AntiAFKActive" then StartAntiAFK() end
-        else
-            btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-            btn.Text = "OFF"
-            if stateVar == "FarmActive" then
-                if State.FarmTask then State.FarmTask:Disconnect(); State.FarmTask = nil end
-                ResetPhysics()
-            end
-            if stateVar == "ESPActive" then
-                for _, v in pairs(State.HighlightInstances) do v:Destroy() end
-                for _, v in pairs(State.NameTags) do v:Destroy() end
-                State.HighlightInstances = {}
-                State.NameTags = {}
-            end
-            if stateVar == "AntiFlingActive" then StopAntiFling() end
-            if stateVar == "AntiAFKActive" then
-                State.AntiAFKActive = false
-                if State.AntiAFKTask then task.cancel(State.AntiAFKTask); State.AntiAFKTask = nil end
-            end
+-- Функция обновления Canvas
+local function UpdateCanvas()
+    local playerHeight = 0
+    local generalHeight = 0
+    -- Считаем высоту PlayerPanel
+    for _, child in ipairs(PlayerPanel:GetChildren()) do
+        if child:IsA("Frame") then
+            local pos = child.Position.Y.Offset + child.Size.Y.Offset
+            if pos > playerHeight then playerHeight = pos end
         end
-    end)
-    
-    yPos = yPos + 35
-    return frame
+    end
+    -- Считаем высоту GeneralPanel
+    for _, child in ipairs(GeneralPanel:GetChildren()) do
+        if child:IsA("Frame") then
+            local pos = child.Position.Y.Offset + child.Size.Y.Offset
+            if pos > generalHeight then generalHeight = pos end
+        end
+    end
+    -- Устанавливаем высоту панелей и Canvas
+    PlayerPanel.Size = UDim2.new(1, 0, 0, playerHeight + 20)
+    GeneralPanel.Size = UDim2.new(1, 0, 0, generalHeight + 20)
+    local maxHeight = math.max(playerHeight, generalHeight) + 20
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, maxHeight)
 end
 
-CreateToggle("FarmActive", "Auto Farm", "FarmActive")
-CreateToggle("ESPActive", "ESP Wallhack", "ESPActive")
-CreateToggle("AntiFlingActive", "Anti-Fling", "AntiFlingActive")
-CreateToggle("AntiAFKActive", "Anti-AFK", "AntiAFKActive")
+-- Создание элементов для PlayerPanel
+local yPosP = 10
 
--- Создание ползунка (обобщённая функция)
-local function CreateSlider(label, minVal, maxVal, step, stateKey, format, applyFunc)
+-- WalkSpeed ползунок
+local function CreateSliderInPanel(panel, label, minVal, maxVal, step, stateKey, format, applyFunc, yPos)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 50)
     frame.Position = UDim2.new(0, 10, 0, yPos)
     frame.BackgroundTransparency = 1
-    frame.Parent = Content
+    frame.Parent = panel
 
     local lbl = Instance.new("TextLabel")
     lbl.Size = UDim2.new(1, 0, 0, 20)
     lbl.Position = UDim2.new(0, 0, 0, 0)
     lbl.BackgroundTransparency = 1
     lbl.Text = label .. ": " .. string.format(format or "%.1f", State[stateKey])
-    lbl.TextColor3 = Color3.fromRGB(220, 220, 220)
+    lbl.TextColor3 = Color3.fromRGB(200, 255, 200)
     lbl.TextSize = 14
     lbl.Font = Enum.Font.Gotham
     lbl.TextXAlignment = Enum.TextXAlignment.Left
@@ -533,7 +566,7 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
     local sliderBg = Instance.new("Frame")
     sliderBg.Size = UDim2.new(1, 0, 0, 6)
     sliderBg.Position = UDim2.new(0, 0, 0, 25)
-    sliderBg.BackgroundColor3 = Color3.fromRGB(80, 80, 90)
+    sliderBg.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
     sliderBg.BorderSizePixel = 0
     sliderBg.Parent = frame
     local bgCorner = Instance.new("UICorner")
@@ -542,7 +575,7 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
 
     local fill = Instance.new("Frame")
     fill.Size = UDim2.new(0, 0, 1, 0)
-    fill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+    fill.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
     fill.BorderSizePixel = 0
     fill.Parent = sliderBg
     local fillCorner = Instance.new("UICorner")
@@ -552,7 +585,7 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
     local thumb = Instance.new("TextButton")
     thumb.Size = UDim2.new(0, 18, 0, 18)
     thumb.Position = UDim2.new(0, -9, 0.5, -9)
-    thumb.BackgroundColor3 = Color3.fromRGB(200, 200, 210)
+    thumb.BackgroundColor3 = Color3.fromRGB(200, 255, 200)
     thumb.Text = ""
     thumb.BorderSizePixel = 0
     thumb.Parent = sliderBg
@@ -561,14 +594,12 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
     thumbCorner.Parent = thumb
 
     local dragging = false
-    local thumbPos = 0
 
     local function UpdateSlider(value)
         local clamped = math.clamp(value, minVal, maxVal)
         local rounded = math.round(clamped / step) * step
         State[stateKey] = rounded
         local ratio = (rounded - minVal) / (maxVal - minVal)
-        thumbPos = ratio
         thumb.Position = UDim2.new(ratio, -9, 0.5, -9)
         fill.Size = UDim2.new(ratio, 0, 1, 0)
         lbl.Text = label .. ": " .. string.format(format or "%.1f", rounded)
@@ -582,13 +613,11 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
             dragging = true
         end
     end)
-
     thumb.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = false
         end
     end)
-
     UserInputService.InputChanged:Connect(function(input)
         if (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) and dragging then
             local pos = input.Position
@@ -599,7 +628,6 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
             UpdateSlider(value)
         end
     end)
-
     sliderBg.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             if not dragging then
@@ -613,33 +641,182 @@ local function CreateSlider(label, minVal, maxVal, step, stateKey, format, apply
         end
     end)
 
-    yPos = yPos + 60
-    return frame
+    return frame, yPos + 60
 end
 
--- Ползунок для скорости ходьбы (применяем к Humanoid.WalkSpeed)
-CreateSlider("Walk Speed", 0, 30, 0.5, "WalkSpeed", "%.1f", function(val)
+-- Функция создания тогла в панели
+local function CreateToggleInPanel(panel, label, stateVar, yPos)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 30)
+    frame.Position = UDim2.new(0, 10, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = panel
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 160, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label
+    lbl.TextColor3 = Color3.fromRGB(200, 255, 200)
+    lbl.TextSize = 14
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 60, 0, 24)
+    btn.Position = UDim2.new(1, -70, 0.5, -12)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    btn.Text = "OFF"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = frame
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+
+    -- Храним ссылку на btn в State для возможности обновления при включении Noclip/InfJump
+    btn.MouseButton1Click:Connect(function()
+        State[stateVar] = not State[stateVar]
+        if State[stateVar] then
+            btn.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+            btn.Text = "ON"
+            -- Действия при включении
+            if stateVar == "Noclip" then
+                SetNoclip(true)
+            elseif stateVar == "InfiniteJump" then
+                SetupInfiniteJump(true)
+            end
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            btn.Text = "OFF"
+            if stateVar == "Noclip" then
+                SetNoclip(false)
+            elseif stateVar == "InfiniteJump" then
+                SetupInfiniteJump(false)
+            end
+        end
+    end)
+
+    return frame, yPos + 35
+end
+
+-- Заполняем PlayerPanel
+local yPosP = 10
+local slW, yPosP = CreateSliderInPanel(PlayerPanel, "Walk Speed", 0, 30, 0.5, "WalkSpeed", "%.1f", function(val)
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.WalkSpeed = val
     end
-end)
+end, yPosP)
 
--- Ползунок для прыжка
-CreateSlider("Jump Power", 0, 200, 1, "JumpPower", "%.0f", function(val)
+local slJ, yPosP = CreateSliderInPanel(PlayerPanel, "Jump Power", 0, 200, 1, "JumpPower", "%.0f", function(val)
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.JumpPower = val
+        State.OriginalJumpPower = val
     end
+end, yPosP)
+
+local togN, yPosP = CreateToggleInPanel(PlayerPanel, "Noclip", "Noclip", yPosP)
+local togI, yPosP = CreateToggleInPanel(PlayerPanel, "Infinite Jump", "InfiniteJump", yPosP)
+
+-- Заполняем GeneralPanel
+local yPosG = 10
+-- Автофарм
+local function CreateGeneralToggle(label, stateVar, yPos, onFunc, offFunc)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 30)
+    frame.Position = UDim2.new(0, 10, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = GeneralPanel
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 160, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = label
+    lbl.TextColor3 = Color3.fromRGB(200, 255, 200)
+    lbl.TextSize = 14
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 60, 0, 24)
+    btn.Position = UDim2.new(1, -70, 0.5, -12)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    btn.Text = "OFF"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = frame
+    local btnCorner = Instance.new("UICorner")
+    btnCorner.CornerRadius = UDim.new(0, 6)
+    btnCorner.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        State[stateVar] = not State[stateVar]
+        if State[stateVar] then
+            btn.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+            btn.Text = "ON"
+            if onFunc then onFunc() end
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            btn.Text = "OFF"
+            if offFunc then offFunc() end
+        end
+    end)
+
+    return frame, yPos + 35
+end
+
+local _, yPosG = CreateGeneralToggle("Auto Farm", "FarmActive", yPosG, StartFarm, function()
+    if State.FarmTask then State.FarmTask:Disconnect(); State.FarmTask = nil end
+    ResetPhysics()
 end)
 
--- Обновление Canvas
-local function UpdateCanvas()
-    local totalHeight = yPos + 20
-    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, totalHeight)
-    Content.Size = UDim2.new(1, 0, 0, totalHeight)
-end
+local _, yPosG = CreateGeneralToggle("ESP Wallhack", "ESPActive", yPosG, UpdateESP, function()
+    for _, v in pairs(State.HighlightInstances) do v:Destroy() end
+    for _, v in pairs(State.NameTags) do v:Destroy() end
+    State.HighlightInstances = {}
+    State.NameTags = {}
+end)
+
+local _, yPosG = CreateGeneralToggle("Anti-Fling", "AntiFlingActive", yPosG, StartAntiFling, StopAntiFling)
+
+local _, yPosG = CreateGeneralToggle("Anti-AFK", "AntiAFKActive", yPosG, StartAntiAFK, function()
+    State.AntiAFKActive = false
+    if State.AntiAFKTask then task.cancel(State.AntiAFKTask); State.AntiAFKTask = nil end
+end)
+
+-- Обновляем Canvas после создания всех элементов
 UpdateCanvas()
 
--- ===== Кнопка Show =====
+-- Переключение вкладок
+local function ShowTab(tab)
+    if tab == "Player" then
+        PlayerPanel.Visible = true
+        GeneralPanel.Visible = false
+        TabPlayer.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+        TabPlayer.TextColor3 = Color3.fromRGB(0, 0, 0)
+        TabGeneral.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
+        TabGeneral.TextColor3 = Color3.fromRGB(200, 255, 200)
+    else
+        PlayerPanel.Visible = false
+        GeneralPanel.Visible = true
+        TabGeneral.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+        TabGeneral.TextColor3 = Color3.fromRGB(0, 0, 0)
+        TabPlayer.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
+        TabPlayer.TextColor3 = Color3.fromRGB(200, 255, 200)
+    end
+    UpdateCanvas()
+end
+
+TabPlayer.MouseButton1Click:Connect(function() ShowTab("Player") end)
+TabGeneral.MouseButton1Click:Connect(function() ShowTab("General") end)
+
+-- По умолчанию показываем Player
+ShowTab("Player")
+
+-- ===== Кнопка Show (плавающая) =====
 local ShowButtonGui = Instance.new("ScreenGui")
 ShowButtonGui.Name = "ShowButton"
 ShowButtonGui.ResetOnSpawn = false
@@ -652,8 +829,8 @@ ShowBtn.Position = UDim2.new(0.9, -25, 0.9, -25)
 ShowBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 50)
 ShowBtn.BackgroundTransparency = 0.2
 ShowBtn.Text = "M"
-ShowBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-ShowBtn.TextSize = 24
+ShowBtn.TextColor3 = Color3.fromRGB(68, 255, 136)
+ShowBtn.TextSize = 28
 ShowBtn.Font = Enum.Font.GothamBold
 ShowBtn.Parent = ShowButtonGui
 local ShowCorner = Instance.new("UICorner")
@@ -714,11 +891,16 @@ CloseBtn.MouseButton1Click:Connect(function()
     State.ESPActive = false
     State.AntiFlingActive = false
     State.AntiAFKActive = false
+    State.Noclip = false
+    State.InfiniteJump = false
     
     if State.FarmTask then State.FarmTask:Disconnect(); State.FarmTask = nil end
     if State.AntiAFKTask then task.cancel(State.AntiAFKTask); State.AntiAFKTask = nil end
+    if State.InfiniteJumpConnection then State.InfiniteJumpConnection:Disconnect(); State.InfiniteJumpConnection = nil end
     
     StopAntiFling()
+    SetNoclip(false)
+    SetupInfiniteJump(false)
     ResetPhysics()
     
     for _, conn in ipairs(State.Connections) do conn:Disconnect() end
@@ -747,7 +929,10 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.WalkSpeed = State.WalkSpeed
         Character.Humanoid.JumpPower = State.JumpPower
+        State.OriginalJumpPower = State.JumpPower
     end
+    if State.Noclip then SetNoclip(true) end
+    if State.InfiniteJump then SetupInfiniteJump(true) end
     if State.FarmActive then
         if State.FarmTask then State.FarmTask:Disconnect() end
         StartFarm()
@@ -759,4 +944,4 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
-print("[good]: MM2 Premium v5.1 – WalkSpeed, автофарм по раундам загружены.")
+print("[good]: MM2 Premium v6.0 – зелёная тема, вкладки Player/General, Noclip, Infinite Jump загружены.")
