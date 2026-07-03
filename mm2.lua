@@ -1,4 +1,4 @@
---[[ MM2 Premium Utility v4.3 – скорость 22, полный сброс физики, фон ДВИЖУХА ]]
+--[[ MM2 Premium Utility v4.3 – фон: флаг Казахстана, репозиторий PutinHub ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -119,19 +119,17 @@ local function UpdateESP()
     end
 end
 
--- ===== ПОЛНЫЙ СБРОС ФИЗИКИ (исправляет "катание по льду" и лаг управления) =====
+-- ===== ПОЛНЫЙ СБРОС ФИЗИКИ =====
 local function ResetPhysics()
     if not Character then return end
-    -- 1. Сброс скоростей
     local hrp = Character:FindFirstChild("HumanoidRootPart")
     if hrp then
         hrp.Velocity = Vector3.new(0,0,0)
         hrp.RotVelocity = Vector3.new(0,0,0)
         hrp.AssemblyLinearVelocity = Vector3.new(0,0,0)
         hrp.AssemblyAngularVelocity = Vector3.new(0,0,0)
-        hrp.CFrame = hrp.CFrame -- фиксация позиции
+        hrp.CFrame = hrp.CFrame
     end
-    -- 2. Восстановление коллизий для всех частей
     for _, part in ipairs(Character:GetDescendants()) do
         if part:IsA("BasePart") then
             part.CanCollide = true
@@ -139,7 +137,6 @@ local function ResetPhysics()
             part.CustomPhysicalProperties = PhysicalProperties.new(1, 0.3, 0.5, true, 1)
         end
     end
-    -- 3. Восстановление Humanoid
     local humanoid = Character:FindFirstChild("Humanoid")
     if humanoid then
         humanoid.PlatformStand = false
@@ -148,14 +145,13 @@ local function ResetPhysics()
         humanoid.AutoRotate = true
         humanoid.MaxHealth = 100
         humanoid.Health = 100
-        -- Сброс анимаций и перемещений
         humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
         task.wait(0.05)
         humanoid:ChangeState(Enum.HumanoidStateType.Running)
     end
 end
 
--- ===== УЛУЧШЕННЫЙ AUTO FARM (скорость 22) =====
+-- ===== AUTO FARM (скорость 22) =====
 local function StartFarm()
     if State.FarmTask then return end
 
@@ -222,7 +218,6 @@ local function StartFarm()
                 if detector then fireclickdetector(detector) end
                 hrp.CFrame = CFrame.new(targetCoin.Position + Vector3.new(0,1,0))
             else
-                -- СКОРОСТЬ ТЕПЕРЬ 22
                 hrp.Velocity = direction * 22
                 hrp.CFrame = CFrame.lookAt(hrp.Position, targetPos)
             end
@@ -235,7 +230,7 @@ local function StartFarm()
     end)
 end
 
--- ===== ОПТИМИЗИРОВАННЫЙ ANTI‑FLING (без изменений) =====
+-- ===== ANTI‑FLING =====
 local function SetCollisionForAllPlayers(enable)
     for _, player in ipairs(Players:GetPlayers()) do
         if player ~= LocalPlayer and player.Character then
@@ -317,7 +312,7 @@ local function StopAntiFling()
     end
 end
 
--- ===== Anti‑AFK =====
+-- ===== ANTI‑AFK =====
 local function StartAntiAFK()
     if State.AntiAFKTask then return end
     State.AntiAFKActive = true
@@ -331,8 +326,8 @@ local function StartAntiAFK()
         end
     end)
 end
---[[ MM2 Premium Utility v4.3 – часть 2 (GUI с фоном "ДВИЖУХА") ]]
--- ===== GUI С ФОНОМ =====
+--[[ MM2 Premium Utility v4.3 – часть 2 (GUI с флагом Казахстана) ]]
+-- ===== GUI =====
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "MM2Utility"
 ScreenGui.ResetOnSpawn = false
@@ -347,36 +342,35 @@ MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
--- Фоновое изображение (новая рабочая ссылка на "ДВИЖУХА")
+-- Фоновое изображение – флаг Казахстана
 local BackgroundImage = Instance.new("ImageLabel")
 BackgroundImage.Size = UDim2.new(1, 0, 1, 0)
 BackgroundImage.Position = UDim2.new(0, 0, 0, 0)
 BackgroundImage.BackgroundTransparency = 1
-BackgroundImage.Image = "https://i.imgur.com/9LtYJ9W.png" -- заменено на рабочую (загрузил сам)
+BackgroundImage.Image = "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d3/Flag_of_Kazakhstan.svg/1280px-Flag_of_Kazakhstan.svg.png"
 BackgroundImage.ScaleType = Enum.ScaleType.Fit
 BackgroundImage.ImageTransparency = 0.25
 BackgroundImage.ZIndex = 0
 BackgroundImage.Parent = MainFrame
 
--- Если картинка не грузится, показываем текст "ДВИЖУХА" как запасной вариант
+-- Запасной текст (если картинка не загрузится)
 local FallbackText = Instance.new("TextLabel")
 FallbackText.Size = UDim2.new(1, 0, 1, 0)
 FallbackText.Position = UDim2.new(0, 0, 0, 0)
 FallbackText.BackgroundTransparency = 1
-FallbackText.Text = "ДВИЖУХА"
-FallbackText.TextColor3 = Color3.fromRGB(255, 200, 50)
+FallbackText.Text = "ҚАЗАҚСТАН"
+FallbackText.TextColor3 = Color3.fromRGB(0, 150, 255)
 FallbackText.TextSize = 40
 FallbackText.Font = Enum.Font.GothamBold
-FallbackText.TextTransparency = 0.7
+FallbackText.TextTransparency = 0.6
 FallbackText.ZIndex = 0
 FallbackText.Parent = MainFrame
--- Делаем текст полупрозрачным, чтобы не мешал
 
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 12)
 UICorner.Parent = MainFrame
 
--- Drag (поддержка мыши и касания)
+-- Drag
 local Dragging = false
 local DragStart, DragStartPos
 
@@ -445,7 +439,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 8)
 CloseCorner.Parent = CloseBtn
 
--- Кнопка Show (плавающая)
+-- Кнопка Show
 local ShowButtonGui = Instance.new("ScreenGui")
 ShowButtonGui.Name = "ShowButton"
 ShowButtonGui.ResetOnSpawn = false
@@ -524,7 +518,7 @@ CloseBtn.MouseButton1Click:Connect(function()
     if State.AntiAFKTask then task.cancel(State.AntiAFKTask); State.AntiAFKTask = nil end
     
     StopAntiFling()
-    ResetPhysics() -- полный сброс
+    ResetPhysics()
     
     for _, conn in ipairs(State.Connections) do conn:Disconnect() end
     State.Connections = {}
@@ -585,7 +579,7 @@ local function CreateToggle(name, label, yPos, stateVar)
             btn.Text = "OFF"
             if stateVar == "FarmActive" then
                 if State.FarmTask then State.FarmTask:Disconnect(); State.FarmTask = nil end
-                ResetPhysics() -- полный сброс физики при выключении
+                ResetPhysics()
             end
             if stateVar == "ESPActive" then
                 for _, v in pairs(State.HighlightInstances) do v:Destroy() end
@@ -619,7 +613,7 @@ task.spawn(function()
     end
 end)
 
--- Обработка респавна персонажа
+-- Обработка респавна
 LocalPlayer.CharacterAdded:Connect(function(newChar)
     Character = newChar
     if State.FarmActive then
@@ -633,4 +627,4 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
-print("[good]: MM2 Premium v4.3 – скорость 22, полный сброс физики, фон ДВИЖУХА.")
+print("[good]: MM2 Premium v4.3 – фон: флаг Казахстана, репозиторий PutinHub. Загружено.")
