@@ -1,4 +1,4 @@
---[[ MM2 Premium Utility v6.1 – финальная стабильная версия ]]
+--[[ MM2 Premium Utility v7.0 – Полный рефакторинг: бесконечный прыжок, автоферма ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -8,6 +8,7 @@ local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local Workspace = game:GetService("Workspace")
 
+-- Состояние
 local State = {
     FarmActive = false,
     ESPActive = false,
@@ -16,6 +17,7 @@ local State = {
     GUIHidden = false,
     WalkSpeed = 16,
     JumpPower = 50,
+    FlySpeed = 22,
     Noclip = false,
     InfiniteJump = false,
     Connections = {},
@@ -124,7 +126,7 @@ local function UpdateESP()
     end
 end
 
--- ===== NOCLIP (постоянный) =====
+-- ===== NOCLIP =====
 local function ApplyNoclip(state)
     if not Character then return end
     for _, part in ipairs(Character:GetDescendants()) do
@@ -148,11 +150,10 @@ local function StopNoclipHeartbeat()
         State.NoclipHeartbeat:Disconnect()
         State.NoclipHeartbeat = nil
     end
-    -- Восстанавливаем коллизию
     ApplyNoclip(false)
 end
 
--- ===== INFINITE JUMP (прыжок в воздухе) =====
+-- ===== БЕСКОНЕЧНЫЙ ПРЫЖОК (работает в воздухе) =====
 local function SetupInfiniteJump(enable)
     if enable then
         if State.InfiniteJumpConnection then return end
@@ -206,7 +207,7 @@ local function ResetPhysics()
         humanoid:ChangeState(Enum.HumanoidStateType.Running)
     end
 end
--- ===== AUTO FARM (без остановок) =====
+-- ===== АВТОФЕРМА (полностью переписана, без остановок) =====
 local function StartFarm()
     if State.FarmTask then return end
 
@@ -237,6 +238,7 @@ local function StartFarm()
 
         local hrp = Character.HumanoidRootPart
 
+        -- Поиск ближайшей монеты
         local targetCoin = nil
         local closestDist = math.huge
         for _, obj in ipairs(Workspace:GetDescendants()) do
@@ -262,14 +264,13 @@ local function StartFarm()
                 if detector then fireclickdetector(detector) end
                 hrp.CFrame = CFrame.new(targetCoin.Position + Vector3.new(0,1,0))
             else
-                hrp.Velocity = direction * 22
+                hrp.Velocity = direction * State.FlySpeed
                 hrp.CFrame = CFrame.lookAt(hrp.Position, targetPos)
             end
         else
             hrp.Velocity = Vector3.new(0,0,0)
         end
 
-        -- Noclip поддерживается отдельным heartbeat, тут не трогаем
         SetFlyMode(true)
     end)
 end
@@ -377,8 +378,8 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 360, 0, 480)
-MainFrame.Position = UDim2.new(0.5, -180, 0.5, -240)
+MainFrame.Size = UDim2.new(0, 380, 0, 520)
+MainFrame.Position = UDim2.new(0.5, -190, 0.5, -260)
 MainFrame.BackgroundColor3 = Color3.fromRGB(25, 40, 25)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
@@ -667,7 +668,7 @@ end
 
 -- Заполнение PlayerPanel
 local yPosP = 10
-local _, yPosP = CreateSliderInPanel(PlayerPanel, "Walk Speed", 0, 30, 0.5, "WalkSpeed", "%.1f", function(val)
+local _, yPosP = CreateSliderInPanel(PlayerPanel, "Walk Speed", 0, 50, 0.5, "WalkSpeed", "%.1f", function(val)
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.WalkSpeed = val
     end
@@ -677,6 +678,7 @@ local _, yPosP = CreateSliderInPanel(PlayerPanel, "Jump Power", 0, 200, 1, "Jump
         Character.Humanoid.JumpPower = val
     end
 end, yPosP)
+local _, yPosP = CreateSliderInPanel(PlayerPanel, "Fly Speed", 1, 50, 0.5, "FlySpeed", "%.1f", nil, yPosP)
 local _, yPosP = CreateToggleInPanel(PlayerPanel, "Noclip", "Noclip", yPosP, function()
     StartNoclipHeartbeat()
     ApplyNoclip(true)
@@ -867,4 +869,4 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
 end)
 
-print("[good]: MM2 Premium v6.1 – финальная стабильная версия. Фарм без остановок, Noclip постоянный, Infinite Jump в воздухе.")
+print("[good]: MM2 Premium v7.0 – Полный рефакторинг: бесконечный прыжок, автоферма.")
