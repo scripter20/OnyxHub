@@ -1,12 +1,12 @@
--- PutinHub Version: 3.7
+-- PutinHub Version: 3.9
 -- ЧАСТЬ 1 (Скопируй и вставь первой в свой файл на GitHub)
 
 local Players = game:GetService("Players")
 local CoreGui = game:GetService("CoreGui")
 local LocalPlayer = Players.LocalPlayer
 
--- Глобальные переменные интерфейса для связи всех трех частей скрипта
-local targetParent, PutinHub, MainFrame, TopBar, TopBarFix, HubTitle, AccentLine, CloseButton, ToggleButton, ToggleStroke, TabsContainer, CreditsCard, CreditsStroke, ContentFrame
+-- Глобальные переменные интерфейса для связи всех частей скрипта
+local targetParent, PutinHub, MainFrame, TopBar, TopBarFix, HubTitle, AccentLine, CloseButton, ToggleButton, ToggleStroke, TabsContainer, CreditsCard, CreditsStroke, ContentFrame, BackgroundImg
 local pages = {}
 local tabs = {}
 local themeStrokes = {}
@@ -44,12 +44,27 @@ local MainCorner = Instance.new("UICorner")
 MainCorner.CornerRadius = UDim.new(0, 9)
 MainCorner.Parent = MainFrame
 
--- Верхняя панель (Шапка)
+-- Фоновый контейнер
+BackgroundImg = Instance.new("ImageLabel")
+BackgroundImg.Name = "BackgroundImg"
+BackgroundImg.Size = UDim2.new(1, 0, 1, 0)
+BackgroundImg.BackgroundTransparency = 1
+BackgroundImg.ImageTransparency = 1
+BackgroundImg.ScaleType = Enum.ScaleType.Crop
+BackgroundImg.ZIndex = 0
+BackgroundImg.Parent = MainFrame
+
+local BgCorner = Instance.new("UICorner")
+BgCorner.CornerRadius = UDim.new(0, 9)
+BgCorner.Parent = BackgroundImg
+
+-- Шапка (TopBar)
 TopBar = Instance.new("Frame")
 TopBar.Name = "TopBar"
 TopBar.Size = UDim2.new(1, 0, 0, 40)
 TopBar.BackgroundColor3 = Color3.fromRGB(22, 38, 22)
 TopBar.BorderSizePixel = 0
+TopBar.ZIndex = 2
 TopBar.Parent = MainFrame
 
 local TopBarCorner = Instance.new("UICorner")
@@ -62,6 +77,7 @@ TopBarFix.Size = UDim2.new(1, 0, 0, 10)
 TopBarFix.Position = UDim2.new(0, 0, 1, -10)
 TopBarFix.BackgroundColor3 = Color3.fromRGB(22, 38, 22)
 TopBarFix.BorderSizePixel = 0
+TopBarFix.ZIndex = 2
 TopBarFix.Parent = TopBar
 
 HubTitle = Instance.new("TextLabel")
@@ -74,6 +90,7 @@ HubTitle.TextColor3 = Color3.fromRGB(74, 222, 128)
 HubTitle.TextSize = 20
 HubTitle.Font = Enum.Font.GothamBold
 HubTitle.TextXAlignment = Enum.TextXAlignment.Left
+HubTitle.ZIndex = 3
 HubTitle.Parent = TopBar
 
 AccentLine = Instance.new("Frame")
@@ -82,6 +99,7 @@ AccentLine.Size = UDim2.new(1, 0, 0, 2)
 AccentLine.Position = UDim2.new(0, 0, 1, 0)
 AccentLine.BackgroundColor3 = Color3.fromRGB(34, 197, 94)
 AccentLine.BorderSizePixel = 0
+AccentLine.ZIndex = 3
 AccentLine.Parent = TopBar
 
 -- Кнопка закрытия
@@ -94,6 +112,7 @@ CloseButton.Text = "×"
 CloseButton.TextColor3 = Color3.fromRGB(239, 68, 68)
 CloseButton.TextSize = 26
 CloseButton.Font = Enum.Font.GothamBold
+CloseButton.ZIndex = 3
 CloseButton.Parent = TopBar
 
 -- Кнопка ZOV
@@ -120,12 +139,13 @@ ToggleStroke.Color = Color3.fromRGB(34, 197, 94)
 ToggleStroke.Thickness = 1.2
 ToggleStroke.Parent = ToggleButton
 
--- Меню вкладок
+-- Левое меню
 TabsContainer = Instance.new("Frame")
 TabsContainer.Name = "TabsContainer"
 TabsContainer.Size = UDim2.new(0, 100, 0, 184)
 TabsContainer.Position = UDim2.new(0, 10, 0, 45)
 TabsContainer.BackgroundTransparency = 1
+TabsContainer.ZIndex = 2
 TabsContainer.Parent = MainFrame
 
 local TabsList = Instance.new("UIListLayout")
@@ -140,6 +160,7 @@ CreditsCard.Size = UDim2.new(0, 100, 0, 40)
 CreditsCard.Position = UDim2.new(0, 10, 1, -45)
 CreditsCard.BackgroundColor3 = Color3.fromRGB(22, 38, 22)
 CreditsCard.BorderSizePixel = 0
+CreditsCard.ZIndex = 2
 CreditsCard.Parent = MainFrame
 
 local CreditsCorner = Instance.new("UICorner")
@@ -160,18 +181,20 @@ CreditsLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
 CreditsLabel.TextSize = 11
 CreditsLabel.Font = Enum.Font.GothamBold
 CreditsLabel.TextWrapped = true
+CreditsLabel.ZIndex = 3
 CreditsLabel.Parent = CreditsCard
 
--- Основная рабочая зона
+-- Основной контейнер страниц
 ContentFrame = Instance.new("Frame")
 ContentFrame.Name = "ContentFrame"
 ContentFrame.Size = UDim2.new(1, -125, 1, -50)
 ContentFrame.Position = UDim2.new(0, 115, 0, 45)
 ContentFrame.BackgroundTransparency = 1
+ContentFrame.ZIndex = 2
 ContentFrame.Parent = MainFrame
 -- ЧАСТЬ 2 (Скопируй и вставь сразу под первой частью в свой файл на GitHub)
 
--- Настройки всех 6 цветовых тем хаба
+-- Настройки всех 7 цветовых тем хаба (С заменой на Казахстан)
 local themes = {
     Green = {
         MainBg = Color3.fromRGB(15, 25, 15),
@@ -185,7 +208,7 @@ local themes = {
         CardBg = Color3.fromRGB(22, 38, 22),
         CardStroke = Color3.fromRGB(34, 197, 94),
         LabelText = Color3.fromRGB(255, 255, 255),
-        SelectedStrokeColor = Color3.fromRGB(34, 255, 100) -- Яркий неоново-зеленый
+        SelectedStrokeColor = Color3.fromRGB(34, 255, 100)
     },
     White = {
         MainBg = Color3.fromRGB(245, 245, 245),
@@ -199,7 +222,7 @@ local themes = {
         CardBg = Color3.fromRGB(230, 230, 230),
         CardStroke = Color3.fromRGB(160, 160, 160),
         LabelText = Color3.fromRGB(40, 40, 40),
-        SelectedStrokeColor = Color3.fromRGB(0, 160, 255) -- Яркий электро-синий
+        SelectedStrokeColor = Color3.fromRGB(0, 160, 255)
     },
     Black = {
         MainBg = Color3.fromRGB(20, 20, 20),
@@ -213,7 +236,7 @@ local themes = {
         CardBg = Color3.fromRGB(28, 28, 28),
         CardStroke = Color3.fromRGB(70, 70, 70),
         LabelText = Color3.fromRGB(255, 255, 255),
-        SelectedStrokeColor = Color3.fromRGB(255, 45, 45) -- Насыщенный красный неон
+        SelectedStrokeColor = Color3.fromRGB(255, 45, 45)
     },
     Blue = {
         MainBg = Color3.fromRGB(14, 20, 33),
@@ -227,7 +250,7 @@ local themes = {
         CardBg = Color3.fromRGB(20, 29, 48),
         CardStroke = Color3.fromRGB(59, 130, 246),
         LabelText = Color3.fromRGB(255, 255, 255),
-        SelectedStrokeColor = Color3.fromRGB(0, 235, 255) -- Неоновый циан
+        SelectedStrokeColor = Color3.fromRGB(0, 235, 255)
     },
     Orange = {
         MainBg = Color3.fromRGB(24, 18, 14),
@@ -241,7 +264,7 @@ local themes = {
         CardBg = Color3.fromRGB(36, 26, 20),
         CardStroke = Color3.fromRGB(234, 88, 12),
         LabelText = Color3.fromRGB(255, 255, 255),
-        SelectedStrokeColor = Color3.fromRGB(255, 140, 0) -- Огненно-оранжевый
+        SelectedStrokeColor = Color3.fromRGB(255, 140, 0)
     },
     Purple = {
         MainBg = Color3.fromRGB(20, 14, 28),
@@ -255,11 +278,25 @@ local themes = {
         CardBg = Color3.fromRGB(29, 20, 41),
         CardStroke = Color3.fromRGB(147, 51, 234),
         LabelText = Color3.fromRGB(255, 255, 255),
-        SelectedStrokeColor = Color3.fromRGB(230, 80, 255) -- Кислотно-пурпурный
+        SelectedStrokeColor = Color3.fromRGB(230, 80, 255)
+    },
+    Kazakhstan = {
+        MainBg = Color3.fromRGB(12, 32, 45),       -- Глубокий бирюзово-синий
+        TopBarBg = Color3.fromRGB(0, 155, 210),     -- Яркий небесно-голубой
+        TitleText = Color3.fromRGB(255, 215, 0),    -- Золотой текст названия
+        Accent = Color3.fromRGB(255, 215, 0),       -- Золотой разделитель
+        TabBg = Color3.fromRGB(16, 46, 64),
+        TabText = Color3.fromRGB(0, 180, 240),
+        ActiveTabBg = Color3.fromRGB(255, 215, 0),  -- Золотая активная вкладка
+        ActiveTabText = Color3.fromRGB(12, 32, 45),
+        CardBg = Color3.fromRGB(16, 46, 64),
+        CardStroke = Color3.fromRGB(255, 215, 0),
+        LabelText = Color3.fromRGB(255, 255, 255),
+        SelectedStrokeColor = Color3.fromRGB(255, 215, 0) -- Мощное неоново-золотое свечение кнопки
     }
 }
 
--- Логика применения стилей ко всему хабу
+-- Функция обновления темы интерфейса
 local function updateTheme(themeName)
     local currentTheme = themes[themeName]
     if not currentTheme then return end
@@ -276,7 +313,7 @@ local function updateTheme(themeName)
     ToggleButton.TextColor3 = currentTheme.TitleText
     ToggleStroke.Color = currentTheme.Accent
 
-    -- Свечение вокруг выбранной плитки темы
+    -- Логика ярких неоновых обводок вокруг выбранной темы
     for tName, stroke in pairs(themeStrokes) do
         if tName == themeName then
             stroke.Enabled = true
@@ -287,7 +324,7 @@ local function updateTheme(themeName)
         end
     end
 
-    -- Перекраска подписей к цветам
+    -- Адаптация текстов внутри страницы кастомизации
     if pages["Theme"] then
         for _, object in ipairs(pages["Theme"]:GetDescendants()) do
             if object:IsA("TextLabel") and not object.Name:find("Btn") then
@@ -297,7 +334,7 @@ local function updateTheme(themeName)
     end
 end
 
--- Переключение вкладок с сохранением стилистики темы
+-- Логика переключения табов
 local function switchTab(activeName)
     currentActiveTab = activeName
     local currentTheme = themes[currentThemeName]
@@ -326,6 +363,7 @@ local function createTab(name, layoutOrder)
     TabButton.Text = name
     TabButton.TextSize = 14
     TabButton.Font = Enum.Font.GothamBold
+    TabButton.ZIndex = 3
     TabButton.LayoutOrder = layoutOrder
     TabButton.Parent = TabsContainer
 
@@ -338,6 +376,7 @@ local function createTab(name, layoutOrder)
     Page.Size = UDim2.new(1, 0, 1, 0)
     Page.BackgroundTransparency = 1
     Page.Visible = false
+    Page.ZIndex = 2
     Page.Parent = ContentFrame
 
     pages[name] = Page
@@ -349,36 +388,38 @@ local function createTab(name, layoutOrder)
 end
 -- ЧАСТЬ 3 (Скопируй и вставь сразу под второй частью в свой файл на GitHub)
 
--- Регистрация всех окон хаба
+-- Инициализация системных окон хаба
 createTab("Main", 1)
 createTab("Player", 2)
 createTab("AutoFarm", 3)
 createTab("Theme", 4)
 createTab("Info", 5)
 
--- Настройка сетки на странице кастомизации под 6 элементов (2 ряда по 3 кнопки)
+-- Настройка автоматической адаптивной сетки под 7 элементов
 local ThemePage = pages["Theme"]
 
 local ThemeGrid = Instance.new("UIGridLayout")
-ThemeGrid.CellSize = UDim2.new(0, 75, 0, 85)
-ThemeGrid.CellPadding = UDim2.new(0, 15, 0, 15)
+ThemeGrid.CellSize = UDim2.new(0, 72, 0, 80)
+ThemeGrid.CellPadding = UDim2.new(0, 12, 0, 12)
 ThemeGrid.HorizontalAlignment = Enum.HorizontalAlignment.Center
 ThemeGrid.VerticalAlignment = Enum.VerticalAlignment.Center
 ThemeGrid.Parent = ThemePage
 
--- Генератор кнопок выбора палитры
+-- Вспомогательный генератор карточек тем
 local function createThemeBlock(themeKey, blockColor, displayName)
     local blockFrame = Instance.new("Frame")
     blockFrame.Name = themeKey .. "Container"
     blockFrame.BackgroundTransparency = 1
+    blockFrame.ZIndex = 3
     blockFrame.Parent = ThemePage
 
     local colorBtn = Instance.new("TextButton")
     colorBtn.Name = themeKey .. "Btn"
-    colorBtn.Size = UDim2.new(1, 0, 0, 50)
+    colorBtn.Size = UDim2.new(1, 0, 0, 46)
     colorBtn.BackgroundColor3 = blockColor
     colorBtn.Text = ""
     colorBtn.AutoButtonColor = true
+    colorBtn.ZIndex = 3
     colorBtn.Parent = blockFrame
 
     local btnCorner = Instance.new("UICorner")
@@ -396,11 +437,12 @@ local function createThemeBlock(themeKey, blockColor, displayName)
     local nameLabel = Instance.new("TextLabel")
     nameLabel.Name = themeKey .. "Label"
     nameLabel.Size = UDim2.new(1, 0, 0, 25)
-    nameLabel.Position = UDim2.new(0, 0, 0, 55)
+    nameLabel.Position = UDim2.new(0, 0, 0, 50)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = displayName
     nameLabel.Font = Enum.Font.GothamBold
-    nameLabel.TextSize = 12
+    nameLabel.TextSize = 11
+    nameLabel.ZIndex = 3
     nameLabel.Parent = blockFrame
 
     colorBtn.MouseButton1Click:Connect(function()
@@ -410,15 +452,16 @@ local function createThemeBlock(themeKey, blockColor, displayName)
     end)
 end
 
--- Создаем 6 интерактивных блоков выбора цвета
+-- Генерация 7 интерактивных кнопок палитр
 createThemeBlock("White", Color3.fromRGB(240, 240, 240), "White")
 createThemeBlock("Black", Color3.fromRGB(35, 35, 35), "Black")
 createThemeBlock("Green", Color3.fromRGB(34, 197, 94), "Green")
 createThemeBlock("Blue", Color3.fromRGB(30, 90, 220), "Blue")
 createThemeBlock("Orange", Color3.fromRGB(234, 88, 12), "Orange")
 createThemeBlock("Purple", Color3.fromRGB(130, 40, 210), "Purple")
+createThemeBlock("Kazakhstan", Color3.fromRGB(0, 155, 210), "Kazakh") -- Плитка небесно-голубого цвета
 
--- Окно подтверждения выхода (ConfirmFrame)
+-- Меню безопасности при закрытии (ConfirmFrame)
 local ConfirmFrame = Instance.new("Frame")
 ConfirmFrame.Name = "ConfirmFrame"
 ConfirmFrame.Size = UDim2.new(0, 260, 0, 120)
@@ -485,7 +528,7 @@ local NoCorner = Instance.new("UICorner")
 NoCorner.CornerRadius = UDim.new(0, 6)
 NoCorner.Parent = NoButton
 
--- Обработчики сигналов клика
+-- Слушатели кликов
 CloseButton.MouseButton1Click:Connect(function()
     ConfirmFrame.Visible = true
 end)
@@ -502,7 +545,7 @@ ToggleButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = not MainFrame.Visible
 end)
 
--- Рендеринг стартовых параметров хаба
+-- Первоначальный запуск интерфейса в дефолтном стиле
 updateTheme("Green")
 switchTab("Main")
 
