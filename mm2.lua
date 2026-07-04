@@ -1,17 +1,18 @@
---[[ PutinHub v2.0 – три вкладки: Player, Main, Info ]]
+--[[ PutinHub v2.1 – подтверждение закрытия ]]
 local Players = game:GetService("Players")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
+local TweenService = game:GetService("TweenService")
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PutinHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- === ГЛАВНОЕ ОКНО (растянуто по высоте для вкладок) ===
+-- === ГЛАВНОЕ ОКНО ===
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 420, 0, 320)  -- высота увеличена
+MainFrame.Size = UDim2.new(0, 420, 0, 320)
 MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
 MainFrame.BackgroundTransparency = 0.1
@@ -19,19 +20,16 @@ MainFrame.BorderSizePixel = 0
 MainFrame.ClipsDescendants = true
 MainFrame.Parent = ScreenGui
 
--- Скругление
 local UICorner = Instance.new("UICorner")
 UICorner.CornerRadius = UDim.new(0, 16)
 UICorner.Parent = MainFrame
 
--- Обводка
 local UIStroke = Instance.new("UIStroke")
 UIStroke.Color = Color3.fromRGB(68, 255, 136)
 UIStroke.Thickness = 2
 UIStroke.Transparency = 0.3
 UIStroke.Parent = MainFrame
 
--- Тень
 local Shadow = Instance.new("Frame")
 Shadow.Size = UDim2.new(1, 8, 1, 8)
 Shadow.Position = UDim2.new(0, -4, 0, -4)
@@ -44,13 +42,12 @@ local ShadowCorner = Instance.new("UICorner")
 ShadowCorner.CornerRadius = UDim.new(0, 18)
 ShadowCorner.Parent = Shadow
 
--- Верхняя панель (заголовок + кнопки)
+-- Верхняя панель
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 45)
 TopBar.BackgroundTransparency = 1
 TopBar.Parent = MainFrame
 
--- Заголовок
 local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(0, 130, 0, 30)
 Title.Position = UDim2.new(0, 15, 0, 8)
@@ -63,7 +60,6 @@ Title.TextXAlignment = Enum.TextXAlignment.Left
 Title.TextYAlignment = Enum.TextYAlignment.Center
 Title.Parent = TopBar
 
--- Зелёный кружок
 local Dot = Instance.new("Frame")
 Dot.Size = UDim2.new(0, 8, 0, 8)
 Dot.Position = UDim2.new(0, 5, 0.5, -4)
@@ -75,12 +71,11 @@ local DotCorner = Instance.new("UICorner")
 DotCorner.CornerRadius = UDim.new(1, 0)
 DotCorner.Parent = Dot
 
--- Версия
 local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v2.0"
+SubTitle.Text = "v2.1"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -88,7 +83,7 @@ SubTitle.TextXAlignment = Enum.TextXAlignment.Right
 SubTitle.TextYAlignment = Enum.TextYAlignment.Center
 SubTitle.Parent = TopBar
 
--- Кнопка закрытия (теперь обычная X)
+-- Кнопка закрытия (теперь с диалогом)
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position = UDim2.new(1, -36, 0, 8)
@@ -103,6 +98,69 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseBtn
 
+-- === ДИАЛОГ ПОДТВЕРЖДЕНИЯ ===
+local DialogFrame = Instance.new("Frame")
+DialogFrame.Size = UDim2.new(0, 260, 0, 110)
+DialogFrame.Position = UDim2.new(0.5, -130, 0.5, -55)
+DialogFrame.BackgroundColor3 = Color3.fromRGB(25, 45, 25)
+DialogFrame.BackgroundTransparency = 0.15
+DialogFrame.BorderSizePixel = 0
+DialogFrame.ClipsDescendants = true
+DialogFrame.Parent = MainFrame
+DialogFrame.Visible = false
+
+local DialogCorner = Instance.new("UICorner")
+DialogCorner.CornerRadius = UDim.new(0, 12)
+DialogCorner.Parent = DialogFrame
+
+local DialogStroke = Instance.new("UIStroke")
+DialogStroke.Color = Color3.fromRGB(68, 255, 136)
+DialogStroke.Thickness = 2
+DialogStroke.Transparency = 0.3
+DialogStroke.Parent = DialogFrame
+
+-- Текст диалога
+local DialogText = Instance.new("TextLabel")
+DialogText.Size = UDim2.new(1, -20, 0, 40)
+DialogText.Position = UDim2.new(0, 10, 0, 10)
+DialogText.BackgroundTransparency = 1
+DialogText.Text = "Точно закрыть PutinHub?"
+DialogText.TextColor3 = Color3.fromRGB(200, 255, 200)
+DialogText.TextSize = 16
+DialogText.Font = Enum.Font.GothamBold
+DialogText.TextXAlignment = Enum.TextXAlignment.Center
+DialogText.Parent = DialogFrame
+
+-- Кнопка "Да"
+local YesBtn = Instance.new("TextButton")
+YesBtn.Size = UDim2.new(0, 80, 0, 30)
+YesBtn.Position = UDim2.new(0.5, -85, 0, 65)
+YesBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+YesBtn.BackgroundTransparency = 0.3
+YesBtn.Text = "Да"
+YesBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+YesBtn.TextSize = 14
+YesBtn.Font = Enum.Font.GothamBold
+YesBtn.Parent = DialogFrame
+local YesCorner = Instance.new("UICorner")
+YesCorner.CornerRadius = UDim.new(0, 6)
+YesCorner.Parent = YesBtn
+
+-- Кнопка "Нет"
+local NoBtn = Instance.new("TextButton")
+NoBtn.Size = UDim2.new(0, 80, 0, 30)
+NoBtn.Position = UDim2.new(0.5, 5, 0, 65)
+NoBtn.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+NoBtn.BackgroundTransparency = 0.3
+NoBtn.Text = "Нет"
+NoBtn.TextColor3 = Color3.fromRGB(0, 0, 0)
+NoBtn.TextSize = 14
+NoBtn.Font = Enum.Font.GothamBold
+NoBtn.Parent = DialogFrame
+local NoCorner = Instance.new("UICorner")
+NoCorner.CornerRadius = UDim.new(0, 6)
+NoCorner.Parent = NoBtn
+
 -- === ВКЛАДКИ ===
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, -20, 0, 36)
@@ -110,7 +168,6 @@ TabsFrame.Position = UDim2.new(0, 10, 0, 48)
 TabsFrame.BackgroundTransparency = 1
 TabsFrame.Parent = MainFrame
 
--- Функция создания вкладки
 local function CreateTab(text, xPos)
     local btn = Instance.new("TextButton")
     btn.Size = UDim2.new(0, 110, 1, 0)
@@ -132,7 +189,6 @@ local TabPlayer = CreateTab("Player", 0)
 local TabMain = CreateTab("Main", 115)
 local TabInfo = CreateTab("Info", 230)
 
--- Контейнеры для содержимого вкладок (пока пустые)
 local ContentFrame = Instance.new("Frame")
 ContentFrame.Size = UDim2.new(1, -20, 1, -100)
 ContentFrame.Position = UDim2.new(0, 10, 0, 90)
@@ -156,11 +212,10 @@ InfoContent.BackgroundTransparency = 1
 InfoContent.Parent = ContentFrame
 InfoContent.Visible = false
 
--- Текст в Info (пока просто)
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v2.0\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v2.1\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
@@ -168,19 +223,16 @@ InfoLabel.TextXAlignment = Enum.TextXAlignment.Center
 InfoLabel.TextYAlignment = Enum.TextYAlignment.Center
 InfoLabel.Parent = InfoContent
 
--- Переключение вкладок
 local function ShowTab(tab)
     PlayerContent.Visible = false
     MainContent.Visible = false
     InfoContent.Visible = false
-    
     TabPlayer.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
     TabPlayer.TextColor3 = Color3.fromRGB(200, 255, 200)
     TabMain.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
     TabMain.TextColor3 = Color3.fromRGB(200, 255, 200)
     TabInfo.BackgroundColor3 = Color3.fromRGB(34, 68, 34)
     TabInfo.TextColor3 = Color3.fromRGB(200, 255, 200)
-    
     if tab == "Player" then
         PlayerContent.Visible = true
         TabPlayer.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
@@ -201,7 +253,7 @@ TabMain.MouseButton1Click:Connect(function() ShowTab("Main") end)
 TabInfo.MouseButton1Click:Connect(function() ShowTab("Info") end)
 ShowTab("Player")
 
--- === ПЕРЕМЕЩАЕМАЯ КНОПКА ZOV ===
+-- === КНОПКА ZOV ===
 local TopButton = Instance.new("TextButton")
 TopButton.Size = UDim2.new(0, 65, 0, 55)
 TopButton.Position = UDim2.new(0.5, -32, 0, 15)
@@ -235,7 +287,6 @@ local TopShadowCorner = Instance.new("UICorner")
 TopShadowCorner.CornerRadius = UDim.new(0, 14)
 TopShadowCorner.Parent = TopShadow
 
--- Перетаскивание ZOV
 local dragging = false
 local dragStart, dragStartPos
 
@@ -265,31 +316,69 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- Логика показа/скрытия
+-- === ЛОГИКА ===
 local guiVisible = true
+
 TopButton.MouseButton1Click:Connect(function()
     guiVisible = not guiVisible
     MainFrame.Visible = guiVisible
 end)
 
-CloseBtn.MouseButton1Click:Connect(function()
+-- Функция закрытия с диалогом
+local function ShowDialog()
+    DialogFrame.Visible = true
+    DialogFrame.BackgroundTransparency = 1
+    TweenService:Create(DialogFrame, TweenInfo.new(0.3, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        BackgroundTransparency = 0.15
+    }):Play()
+end
+
+local function HideDialog()
+    TweenService:Create(DialogFrame, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.In), {
+        BackgroundTransparency = 1
+    }):Play()
+    task.wait(0.2)
+    DialogFrame.Visible = false
+end
+
+CloseBtn.MouseButton1Click:Connect(ShowDialog)
+
+YesBtn.MouseButton1Click:Connect(function()
     ScreenGui:Destroy()
+end)
+
+NoBtn.MouseButton1Click:Connect(function()
+    HideDialog()
+end)
+
+-- Нажатие вне диалога закрывает его (для телефона)
+MainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch and DialogFrame.Visible then
+        local pos = input.Position
+        local absPos = DialogFrame.AbsolutePosition
+        local size = DialogFrame.AbsoluteSize
+        if not (pos.X >= absPos.X and pos.X <= absPos.X + size.X and pos.Y >= absPos.Y and pos.Y <= absPos.Y + size.Y) then
+            HideDialog()
+        end
+    end
 end)
 
 UserInputService.InputBegan:Connect(function(input, gameProcessed)
     if gameProcessed then return end
     if input.KeyCode == Enum.KeyCode.Z then
-        guiVisible = not guiVisible
-        MainFrame.Visible = guiVisible
+        if DialogFrame.Visible then
+            HideDialog()
+        else
+            guiVisible = not guiVisible
+            MainFrame.Visible = guiVisible
+        end
     end
 end)
 
 -- Анимация
 MainFrame.BackgroundTransparency = 1
-local tweenService = game:GetService("TweenService")
-local tween = tweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
     BackgroundTransparency = 0.1
-})
-tween:Play()
+}):Play()
 
-print("[good]: PutinHub v2.0 – три вкладки: Player, Main, Info.")
+print("[good]: PutinHub v2.1 – подтверждение закрытия.")
