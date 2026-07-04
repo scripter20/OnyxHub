@@ -1,4 +1,4 @@
---[[ PutinHub v3.5 – ЧАСТЬ 1 (динамическое обновление при смене оружия) ]]
+--[[ PutinHub v3.6 – ЧАСТЬ 1 ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -21,7 +21,6 @@ local State = {
 
 -- === РОЛИ ===
 local RoleCache = {}
-local WeaponTrackers = {}
 
 local function IsMurderer(p)
     local c = p.Character
@@ -98,7 +97,9 @@ local function GetRoleColor(role)
     return Color3.fromRGB(50, 255, 50)
 end
 
--- === ОТСЛЕЖИВАНИЕ ОРУЖИЯ (динамическое обновление) ===
+-- === ТРЕКЕРЫ ОРУЖИЯ ===
+local WeaponTrackers = {}
+
 local function TrackWeapons(p)
     if WeaponTrackers[p] then
         for _, conn in ipairs(WeaponTrackers[p]) do
@@ -136,8 +137,10 @@ local function TrackWeapons(p)
 end
 
 -- === СОБЫТИЯ ===
-Players.PlayerAdded:Connect(function(p)
+local function OnPlayerAdded(p)
+    if p == LocalPlayer then return end
     p.CharacterAdded:Connect(function()
+        task.wait(0.3)
         UpdatePlayerRole(p)
         TrackWeapons(p)
         if State.ESP then UpdateESP() end
@@ -147,7 +150,9 @@ Players.PlayerAdded:Connect(function(p)
         TrackWeapons(p)
         if State.ESP then UpdateESP() end
     end
-end)
+end
+
+Players.PlayerAdded:Connect(OnPlayerAdded)
 
 Players.PlayerRemoving:Connect(function(p)
     RoleCache[p] = nil
@@ -163,6 +168,7 @@ end)
 for _, p in ipairs(Players:GetPlayers()) do
     if p ~= LocalPlayer then
         p.CharacterAdded:Connect(function()
+            task.wait(0.3)
             UpdatePlayerRole(p)
             TrackWeapons(p)
             if State.ESP then UpdateESP() end
@@ -176,7 +182,7 @@ end
 
 task.spawn(function()
     while true do
-        task.wait(3)
+        task.wait(2)
         for _, p in ipairs(Players:GetPlayers()) do
             if p ~= LocalPlayer then
                 UpdatePlayerRole(p)
@@ -291,7 +297,7 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v3.5"
+SubTitle.Text = "v3.6"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -371,7 +377,7 @@ NoBtn.Parent = DialogFrame
 local NoCorner = Instance.new("UICorner")
 NoCorner.CornerRadius = UDim.new(0, 6)
 NoCorner.Parent = NoBtn
---[[ PutinHub v3.5 – ЧАСТЬ 2 ]]
+--[[ PutinHub v3.6 – ЧАСТЬ 2 ]]
 
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, -20, 0, 36)
@@ -479,7 +485,7 @@ end)
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v3.5\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v3.6\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
@@ -641,4 +647,4 @@ TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.Ea
     BackgroundTransparency = 0.1
 }):Play()
 
-print("[good]: PutinHub v3.5 – динамическое обновление при смене оружия.")
+print("[good]: PutinHub v3.6 – стабильный ESP с динамическим обновлением.")
