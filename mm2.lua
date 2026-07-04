@@ -1,19 +1,162 @@
---[[ PutinHub v2.3 – ссылка на приватный сервер в консоль ]]
+--[[ PutinHub v3.0 – ESP с ролями ]]
 local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
 local LocalPlayer = Players.LocalPlayer
+local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
 local TweenService = game:GetService("TweenService")
-
--- ССЫЛКА НА ПРИВАТНЫЙ СЕРВЕР (только здесь)
-local PRIVATE_SERVER_URL = "https://www.roblox.com/share?code=1f39d07709726d49ab65e918910dce4c&type=Server"
+local Workspace = game:GetService("Workspace")
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PutinHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- === ГЛАВНОЕ ОКНО ===
+-- === СОСТОЯНИЕ ===
+local State = {
+    ESP = false,
+    ESPHighlights = {},
+    ESPNames = {},
+}
+
+-- === РОЛИ ===
+local function IsMurderer(p)
+    local c = p.Character
+    if not c then return false end
+    for _, v in ipairs(c:GetDescendants()) do
+        if v:IsA("Tool") and (v.Name:lower():find("knife") or v.Name:lower():find("murder")) then
+            return true
+        end
+    end
+    local bp = p:FindFirstChild("Backpack")
+    if bp then
+        for _, v in ipairs(bp:GetDescendants()) do
+            if v:IsA("Tool") and (v.Name:lower():find("knife") or v.Name:lower():find("murder")) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function IsSheriff(p)
+    local c = p.Character
+    if not c then return false end
+    for _, v in ipairs(c:GetDescendants()) do
+        if v:IsA("Tool") and (v.Name:lower():find("gun") or v.Name:lower():find("pistol") or v.Name:lower():find("sheriff")) then
+            return true
+        end
+    end
+    local bp = p:FindFirstChild("Backpack")
+    if bp then
+        for _, v in ipairs(bp:GetDescendants()) do
+            if v:IsA("Tool") and (v.Name:lower():find("gun") or v.Name:lower():find("pistol") or v.Name:lower():find("sheriff")) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function IsHero(p)
+    -- Герой — если у игрока есть пистолет, но он не шериф (подобрал)
+    if IsSheriff(p) then return false end
+    local c = p.Character
+    if not c then return false end
+    for _, v in ipairs(c:GetDescendants()) do
+        if v:IsA("Tool") and (v.Name:lower():find("gun") or v.Name:lower():find("pistol")) then
+            return true
+        end
+    end
+    local bp = p:FindFirstChild("Backpack")
+    if bp then
+        for _, v in ipairs(bp:GetDescendants()) do
+            if v:IsA("Tool") and (v.Name:lower():find("gun") or v.Name:lower():find("pistol")) then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+local function GetRole(p)
+    if p == LocalPlayer then return "Innocent" end
+    if IsMurderer(p) then return "Murderer" end
+    if IsSheriff(p) then return "Sheriff" end
+    if IsHero(p) then return "Hero" end
+    return "Innocent"
+end
+
+local function GetRoleColor(role)
+    if role == "Murderer" then return Color3.fromRGB(255, 50, 50) end      -- Красный
+    if role == "Sheriff" then return Color3.fromRGB(50, 150, 255) end      -- Синий
+    if role == "Hero" then return Color3.fromRGB(255, 215, 0) end          -- Жёлтый
+    return Color3.fromRGB(50, 255, 50)                                     -- Зелёный (Innocent)
+end
+
+-- === ESP ===
+local function UpdateESP()
+    -- Очистка старых объектов
+    for _, v in pairs(State.ESPHighlights) do v:Destroy() end
+    for _, v in pairs(State.ESPNames) do v:Destroy() end
+    State.ESPHighlights = {}
+    State.ESPNames = {}
+
+    if not State.ESP then return end
+
+    for _, p in ipairs(Players:GetPlayers()) do
+        if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local c = p.Character
+            local hrp = c.HumanoidRootPart
+            local role = GetRole(p)
+            local col = GetRoleColor(role)
+
+            -- Highlight
+            local h = Instance.new("Highlight")
+            h.Adornee = c
+            h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+            h.Enabled = true
+            h.FillColor = col
+            h.OutlineColor = col
+            h.Parent = c
+            table.insert(State.ESPHighlights, h)
+
+            -- Billboard с именем
+            local b = Instance.new("BillboardGui")
+            b.AlwaysOnTop = true
+            b.Size = UDim2.new(0, 200, 0, 50)
+            b.Adornee = hrp
+            b.StudsOffset = Vector3.new(0, 3.5, 0)
+            b.Parent = c
+
+            local l = Instance.new("TextLabel")
+            l.Size = UDim2.new(1, 0, 1, 0)
+            l.BackgroundTransparency = 1
+            l.Text = p.Name
+            l.TextColor3 = col
+            l.TextStrokeTransparency = 0.3
+            l.TextSize = 18
+            l.Font = Enum.Font.GothamBold
+            l.Parent = b
+            table.insert(State.ESPNames, b)
+        end
+    end
+end
+
+-- Автообновление ESP каждые 2 секунды
+local function StartESPUpdater()
+    task.spawn(function()
+        while ScreenGui and ScreenGui.Parent do
+            if State.ESP then
+                UpdateESP()
+            end
+            task.wait(2)
+        end
+    end)
+end
+
+-- === GUI (главное окно) ===
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 420, 0, 320)
 MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
@@ -45,7 +188,6 @@ local ShadowCorner = Instance.new("UICorner")
 ShadowCorner.CornerRadius = UDim.new(0, 18)
 ShadowCorner.Parent = Shadow
 
--- Верхняя панель
 local TopBar = Instance.new("Frame")
 TopBar.Size = UDim2.new(1, 0, 0, 45)
 TopBar.BackgroundTransparency = 1
@@ -78,7 +220,7 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v2.3"
+SubTitle.Text = "v3.0"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -86,7 +228,6 @@ SubTitle.TextXAlignment = Enum.TextXAlignment.Right
 SubTitle.TextYAlignment = Enum.TextYAlignment.Center
 SubTitle.Parent = TopBar
 
--- Кнопка закрытия
 local CloseBtn = Instance.new("TextButton")
 CloseBtn.Size = UDim2.new(0, 28, 0, 28)
 CloseBtn.Position = UDim2.new(1, -36, 0, 8)
@@ -101,7 +242,7 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseBtn
 
--- === ДИАЛОГ ПОДТВЕРЖДЕНИЯ ===
+-- === ДИАЛОГ ЗАКРЫТИЯ ===
 local DialogFrame = Instance.new("Frame")
 DialogFrame.Size = UDim2.new(0, 260, 0, 110)
 DialogFrame.Position = UDim2.new(0.5, -130, 0.5, -55)
@@ -212,10 +353,66 @@ InfoContent.BackgroundTransparency = 1
 InfoContent.Parent = ContentFrame
 InfoContent.Visible = false
 
+-- === СОЗДАНИЕ ТОГЛОВ ===
+local function CreateToggle(text, stateKey, yPos, onFunc, offFunc)
+    local frame = Instance.new("Frame")
+    frame.Size = UDim2.new(1, -20, 0, 30)
+    frame.Position = UDim2.new(0, 10, 0, yPos)
+    frame.BackgroundTransparency = 1
+    frame.Parent = MainContent
+
+    local lbl = Instance.new("TextLabel")
+    lbl.Size = UDim2.new(0, 130, 1, 0)
+    lbl.BackgroundTransparency = 1
+    lbl.Text = text
+    lbl.TextColor3 = Color3.fromRGB(200, 255, 200)
+    lbl.TextSize = 14
+    lbl.Font = Enum.Font.Gotham
+    lbl.TextXAlignment = Enum.TextXAlignment.Left
+    lbl.Parent = frame
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 55, 0, 24)
+    btn.Position = UDim2.new(1, -65, 0.5, -12)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    btn.Text = "OFF"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 12
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = frame
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 6)
+    bc.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        State[stateKey] = not State[stateKey]
+        if State[stateKey] then
+            btn.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+            btn.Text = "ON"
+            if onFunc then onFunc() end
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            btn.Text = "OFF"
+            if offFunc then offFunc() end
+        end
+    end)
+end
+
+-- Добавляем ESP в Main
+CreateToggle("ESP Wallhack", "ESP", 10, function()
+    UpdateESP()
+end, function()
+    for _, v in pairs(State.ESPHighlights) do v:Destroy() end
+    for _, v in pairs(State.ESPNames) do v:Destroy() end
+    State.ESPHighlights = {}
+    State.ESPNames = {}
+end)
+
+-- Info
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v2.3\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v3.0\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
@@ -251,7 +448,7 @@ end
 TabPlayer.MouseButton1Click:Connect(function() ShowTab("Player") end)
 TabMain.MouseButton1Click:Connect(function() ShowTab("Main") end)
 TabInfo.MouseButton1Click:Connect(function() ShowTab("Info") end)
-ShowTab("Player")
+ShowTab("Main")
 
 -- === КНОПКА ZOV ===
 local TopButton = Instance.new("TextButton")
@@ -373,12 +570,13 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+-- Запуск обновления ESP
+StartESPUpdater()
+
 -- Анимация
 MainFrame.BackgroundTransparency = 1
 TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
     BackgroundTransparency = 0.1
 }):Play()
 
--- Выводим ссылку в консоль (только здесь!)
-print("[good]: PutinHub v2.3 загружен.")
-print("[good]: Приватный сервер: https://www.roblox.com/share?code=1f39d07709726d49ab65e918910dce4c&type=Server")
+print("[good]: PutinHub v3.0 – ESP загружен. Роли: Innocent🟢, Sheriff🔵, Hero🟡, Murderer🔴.")
