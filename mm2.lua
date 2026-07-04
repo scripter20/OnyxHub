@@ -1,4 +1,4 @@
---[[ PutinHub v3.0 – ESP с ролями ]]
+--[[ PutinHub v3.1 – ЧАСТЬ 1 ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -13,7 +13,6 @@ ScreenGui.Name = "PutinHub"
 ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
--- === СОСТОЯНИЕ ===
 local State = {
     ESP = false,
     ESPHighlights = {},
@@ -40,28 +39,7 @@ local function IsMurderer(p)
     return false
 end
 
-local function IsSheriff(p)
-    local c = p.Character
-    if not c then return false end
-    for _, v in ipairs(c:GetDescendants()) do
-        if v:IsA("Tool") and (v.Name:lower():find("gun") or v.Name:lower():find("pistol") or v.Name:lower():find("sheriff")) then
-            return true
-        end
-    end
-    local bp = p:FindFirstChild("Backpack")
-    if bp then
-        for _, v in ipairs(bp:GetDescendants()) do
-            if v:IsA("Tool") and (v.Name:lower():find("gun") or v.Name:lower():find("pistol") or v.Name:lower():find("sheriff")) then
-                return true
-            end
-        end
-    end
-    return false
-end
-
-local function IsHero(p)
-    -- Герой — если у игрока есть пистолет, но он не шериф (подобрал)
-    if IsSheriff(p) then return false end
+local function HasGun(p)
     local c = p.Character
     if not c then return false end
     for _, v in ipairs(c:GetDescendants()) do
@@ -83,36 +61,48 @@ end
 local function GetRole(p)
     if p == LocalPlayer then return "Innocent" end
     if IsMurderer(p) then return "Murderer" end
-    if IsSheriff(p) then return "Sheriff" end
-    if IsHero(p) then return "Hero" end
+    if HasGun(p) then
+        local char = p.Character
+        if char then
+            for _, v in ipairs(char:GetDescendants()) do
+                if v:IsA("BasePart") and v.Name:lower():find("sheriff") then
+                    return "Sheriff"
+                end
+            end
+            local bp = p:FindFirstChild("Backpack")
+            if bp then
+                for _, v in ipairs(bp:GetDescendants()) do
+                    if v:IsA("Tool") and v.Name:lower():find("sheriff") then
+                        return "Sheriff"
+                    end
+                end
+            end
+        end
+        return "Hero"
+    end
     return "Innocent"
 end
 
 local function GetRoleColor(role)
-    if role == "Murderer" then return Color3.fromRGB(255, 50, 50) end      -- Красный
-    if role == "Sheriff" then return Color3.fromRGB(50, 150, 255) end      -- Синий
-    if role == "Hero" then return Color3.fromRGB(255, 215, 0) end          -- Жёлтый
-    return Color3.fromRGB(50, 255, 50)                                     -- Зелёный (Innocent)
+    if role == "Murderer" then return Color3.fromRGB(255, 50, 50) end
+    if role == "Sheriff" then return Color3.fromRGB(50, 150, 255) end
+    if role == "Hero" then return Color3.fromRGB(255, 215, 0) end
+    return Color3.fromRGB(50, 255, 50)
 end
 
 -- === ESP ===
 local function UpdateESP()
-    -- Очистка старых объектов
     for _, v in pairs(State.ESPHighlights) do v:Destroy() end
     for _, v in pairs(State.ESPNames) do v:Destroy() end
     State.ESPHighlights = {}
     State.ESPNames = {}
-
     if not State.ESP then return end
-
     for _, p in ipairs(Players:GetPlayers()) do
         if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
             local c = p.Character
             local hrp = c.HumanoidRootPart
             local role = GetRole(p)
             local col = GetRoleColor(role)
-
-            -- Highlight
             local h = Instance.new("Highlight")
             h.Adornee = c
             h.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
@@ -121,15 +111,12 @@ local function UpdateESP()
             h.OutlineColor = col
             h.Parent = c
             table.insert(State.ESPHighlights, h)
-
-            -- Billboard с именем
             local b = Instance.new("BillboardGui")
             b.AlwaysOnTop = true
             b.Size = UDim2.new(0, 200, 0, 50)
             b.Adornee = hrp
             b.StudsOffset = Vector3.new(0, 3.5, 0)
             b.Parent = c
-
             local l = Instance.new("TextLabel")
             l.Size = UDim2.new(1, 0, 1, 0)
             l.BackgroundTransparency = 1
@@ -144,19 +131,16 @@ local function UpdateESP()
     end
 end
 
--- Автообновление ESP каждые 2 секунды
 local function StartESPUpdater()
     task.spawn(function()
         while ScreenGui and ScreenGui.Parent do
-            if State.ESP then
-                UpdateESP()
-            end
+            if State.ESP then UpdateESP() end
             task.wait(2)
         end
     end)
 end
 
--- === GUI (главное окно) ===
+-- === GUI (до вкладок) ===
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 420, 0, 320)
 MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
@@ -220,7 +204,7 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v3.0"
+SubTitle.Text = "v3.1"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -242,7 +226,6 @@ local CloseCorner = Instance.new("UICorner")
 CloseCorner.CornerRadius = UDim.new(0, 6)
 CloseCorner.Parent = CloseBtn
 
--- === ДИАЛОГ ЗАКРЫТИЯ ===
 local DialogFrame = Instance.new("Frame")
 DialogFrame.Size = UDim2.new(0, 260, 0, 110)
 DialogFrame.Position = UDim2.new(0.5, -130, 0.5, -55)
@@ -301,8 +284,8 @@ NoBtn.Parent = DialogFrame
 local NoCorner = Instance.new("UICorner")
 NoCorner.CornerRadius = UDim.new(0, 6)
 NoCorner.Parent = NoBtn
+--[[ PutinHub v3.1 – ЧАСТЬ 2 ]]
 
--- === ВКЛАДКИ ===
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, -20, 0, 36)
 TabsFrame.Position = UDim2.new(0, 10, 0, 48)
@@ -353,7 +336,6 @@ InfoContent.BackgroundTransparency = 1
 InfoContent.Parent = ContentFrame
 InfoContent.Visible = false
 
--- === СОЗДАНИЕ ТОГЛОВ ===
 local function CreateToggle(text, stateKey, yPos, onFunc, offFunc)
     local frame = Instance.new("Frame")
     frame.Size = UDim2.new(1, -20, 0, 30)
@@ -398,21 +380,17 @@ local function CreateToggle(text, stateKey, yPos, onFunc, offFunc)
     end)
 end
 
--- Добавляем ESP в Main
-CreateToggle("ESP Wallhack", "ESP", 10, function()
-    UpdateESP()
-end, function()
+CreateToggle("ESP Wallhack", "ESP", 10, UpdateESP, function()
     for _, v in pairs(State.ESPHighlights) do v:Destroy() end
     for _, v in pairs(State.ESPNames) do v:Destroy() end
     State.ESPHighlights = {}
     State.ESPNames = {}
 end)
 
--- Info
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v3.0\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v3.1\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
@@ -450,7 +428,6 @@ TabMain.MouseButton1Click:Connect(function() ShowTab("Main") end)
 TabInfo.MouseButton1Click:Connect(function() ShowTab("Info") end)
 ShowTab("Main")
 
--- === КНОПКА ZOV ===
 local TopButton = Instance.new("TextButton")
 TopButton.Size = UDim2.new(0, 65, 0, 55)
 TopButton.Position = UDim2.new(0.5, -32, 0, 15)
@@ -513,7 +490,6 @@ UserInputService.InputEnded:Connect(function(input)
     end
 end)
 
--- === ЛОГИКА ===
 local guiVisible = true
 
 TopButton.MouseButton1Click:Connect(function()
@@ -570,13 +546,11 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Запуск обновления ESP
 StartESPUpdater()
 
--- Анимация
 MainFrame.BackgroundTransparency = 1
 TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
     BackgroundTransparency = 0.1
 }):Play()
 
-print("[good]: PutinHub v3.0 – ESP загружен. Роли: Innocent🟢, Sheriff🔵, Hero🟡, Murderer🔴.")
+print("[good]: PutinHub v3.1 – ESP с правильным Hero загружен.")
