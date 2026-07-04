@@ -388,7 +388,7 @@ local function createTab(name, layoutOrder)
         switchTab(name)
     end)
 end
--- ЧАСТЬ 3 (Скопируй и замени ею прошлую третью часть на GitHub)
+-- ЧАСТЬ 3 (Полностью скопируй и замени ею прошлую третью часть на GitHub)
 
 -- Инициализация системных окон хаба
 createTab("Main", 1)
@@ -397,7 +397,295 @@ createTab("AutoFarm", 3)
 createTab("Theme", 4)
 createTab("Info", 5)
 
--- Настройка вкладки Theme (Кастомизация)
+---------------------------------------------------------------------------
+-- НАСТРОЙКА ВКЛАДКИ PLAYER (Движение и ESP для MM2)
+---------------------------------------------------------------------------
+local PlayerPage = pages["Player"]
+
+-- Настройка вертикального списка элементов страницы Player
+local PlayerList = Instance.new("UIListLayout")
+PlayerList.Padding = UDim.new(0, 12)
+PlayerList.SortOrder = Enum.SortOrder.LayoutOrder
+PlayerList.Parent = PlayerPage
+
+local PlayerPadding = Instance.new("UIPadding")
+PlayerPadding.PaddingLeft = UDim.new(0, 15)
+PlayerPadding.PaddingTop = UDim.new(0, 12)
+PlayerPadding.PaddingRight = UDim.new(0, 15)
+PlayerPadding.Parent = PlayerPage
+
+-- Хранилище настроек движения персонажа
+local currentWalkSpeed = 16
+local currentJumpPower = 50
+
+-- Функция создания текстовых заголовков разделов (Movement, Visuals)
+local function createSectionHeader(text, layoutOrder)
+    local header = Instance.new("TextLabel")
+    header.Name = "Header_" .. text
+    header.Size = UDim2.new(1, 0, 0, 20)
+    header.BackgroundTransparency = 1
+    header.Text = text:upper()
+    header.Font = Enum.Font.GothamBold
+    header.TextSize = 15
+    header.TextColor3 = Color3.fromRGB(240, 240, 240)
+    header.TextXAlignment = Enum.TextXAlignment.Left
+    header.LayoutOrder = layoutOrder
+    header.ZIndex = 3
+    header.Parent = PlayerPage
+end
+
+-- Универсальная функция создания плавных ползунков (Sliders)
+local function createSlider(text, min, max, default, step, layoutOrder, callback)
+    local sliderFrame = Instance.new("Frame")
+    sliderFrame.Name = text .. "SliderFrame"
+    sliderFrame.Size = UDim2.new(1, 0, 0, 45)
+    sliderFrame.BackgroundTransparency = 1
+    sliderFrame.LayoutOrder = layoutOrder
+    sliderFrame.Parent = PlayerPage
+
+    local title = Instance.new("TextLabel")
+    title.Name = "SliderTitle"
+    title.Size = UDim2.new(1, 0, 0, 18)
+    title.BackgroundTransparency = 1
+    title.Text = text .. ": " .. tostring(default)
+    title.Font = Enum.Font.GothamBold
+    title.TextSize = 13
+    title.TextColor3 = Color3.fromRGB(180, 180, 180)
+    title.TextXAlignment = Enum.TextXAlignment.Left
+    title.ZIndex = 3
+    title.Parent = sliderFrame
+
+    local track = Instance.new("TextButton")
+    track.Name = "SliderTrack"
+    track.Size = UDim2.new(1, 0, 0, 6)
+    track.Position = UDim2.new(0, 0, 0, 25)
+    track.BackgroundColor3 = Color3.fromRGB(35, 45, 35)
+    track.Text = ""
+    track.AutoButtonColor = false
+    track.ZIndex = 3
+    track.Parent = sliderFrame
+    
+    local trackCorner = Instance.new("UICorner")
+    trackCorner.CornerRadius = UDim.new(0, 3)
+    trackCorner.Parent = track
+
+    local fill = Instance.new("Frame")
+    fill.Name = "SliderFill"
+    fill.Size = UDim2.new((default - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(34, 197, 94) -- Будет гармонировать с основной темой
+    fill.BorderSizePixel = 0
+    fill.ZIndex = 4
+    fill.Parent = track
+    
+    local fillCorner = Instance.new("UICorner")
+    fillCorner.CornerRadius = UDim.new(0, 3)
+    fillCorner.Parent = fill
+
+    local holding = false
+
+    local function updateSlider(input)
+        local pos = math.clamp((input.Position.X - track.AbsolutePosition.X) / track.AbsoluteSize.X, 0, 1)
+        local rawValue = min + (max - min) * pos
+        local value = math.floor(rawValue / step + 0.5) * step
+        value = math.clamp(value, min, max)
+        
+        fill.Size = UDim2.new((value - min) / (max - min), 0, 1, 0)
+        title.Text = text .. ": " .. tostring(value)
+        callback(value)
+    end
+
+    track.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            holding = true
+            updateSlider(input)
+        end
+    end)
+
+    game:GetService("UserInputService").InputChanged:Connect(function(input)
+        if holding and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            updateSlider(input)
+        end
+    end)
+
+    game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            holding = false
+        end
+    end)
+end
+
+-- Создаём блок Движения
+createSectionHeader("Movement", 1)
+
+createSlider("WalkSpeed", 0, 50, 16, 0.5, 2, function(value)
+    currentWalkSpeed = value
+end)
+
+createSlider("JumpPower", 0, 200, 50, 1, 3, function(value)
+    currentJumpPower = value
+end)
+
+-- Создаём блок Визуалов (ESP)
+createSectionHeader("Visuals", 4)
+
+local espToggleFrame = Instance.new("Frame")
+espToggleFrame.Name = "EspToggleFrame"
+espToggleFrame.Size = UDim2.new(1, 0, 0, 32)
+espToggleFrame.BackgroundTransparency = 1
+espToggleFrame.LayoutOrder = 5
+espToggleFrame.Parent = PlayerPage
+
+local espBtn = Instance.new("TextButton")
+espBtn.Name = "EspToggleBtn"
+espBtn.Size = UDim2.new(0, 130, 1, 0)
+espBtn.BackgroundColor3 = Color3.fromRGB(25, 35, 25)
+espBtn.Text = "ESP: OFF"
+espBtn.Font = Enum.Font.GothamBold
+espBtn.TextColor3 = Color3.fromRGB(239, 68, 68)
+espBtn.TextSize = 13
+espBtn.ZIndex = 3
+espBtn.Parent = espToggleFrame
+
+local espBtnCorner = Instance.new("UICorner")
+espBtnCorner.CornerRadius = UDim.new(0, 6)
+espBtnCorner.Parent = espBtn
+
+local espStroke = Instance.new("UIStroke")
+espStroke.Color = Color3.fromRGB(239, 68, 68)
+espStroke.Thickness = 1
+espStroke.Parent = espBtn
+
+---------------------------------------------------------------------------
+-- СИСТЕМНАЯ ЛОГИКА ESP И ДВИЖЕНИЯ (Многопоточность)
+---------------------------------------------------------------------------
+local espEnabled = false
+local espFolder = Instance.new("Folder")
+espFolder.Name = "PutinHub_ESP"
+espFolder.Parent = CoreGui -- Чтобы никто случайно не стёр из Workspace
+
+local originalSheriff = nil
+
+-- Обработчик клика по кнопке включения/выключения ESP
+espBtn.MouseButton1Click:Connect(function()
+    espEnabled = not espEnabled
+    if espEnabled then
+        espBtn.Text = "ESP: ON"
+        espBtn.TextColor3 = Color3.fromRGB(74, 222, 128)
+        espStroke.Color = Color3.fromRGB(34, 197, 94)
+    else
+        espBtn.Text = "ESP: OFF"
+        espBtn.TextColor3 = Color3.fromRGB(239, 68, 68)
+        espStroke.Color = Color3.fromRGB(239, 68, 68)
+        espFolder:ClearAllChildren()
+        originalSheriff = nil
+    end
+end)
+
+-- Постоянный цикл удержания WalkSpeed и JumpPower персонажа
+task.spawn(function()
+    while task.wait(0.1) do
+        pcall(function()
+            if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("Humanoid") then
+                local hum = LocalPlayer.Character.Humanoid
+                if hum.WalkSpeed ~= currentWalkSpeed then
+                    hum.WalkSpeed = currentWalkSpeed
+                end
+                if hum.JumpPower ~= currentJumpPower then
+                    hum.UseJumpPower = true
+                    hum.JumpPower = currentJumpPower
+                end
+            end
+        end)
+    end
+end)
+
+-- Умный цикл трекинга ролей в MM2 и отрисовки Highlight ESP
+task.spawn(function()
+    while task.wait(0.4) do
+        if not espEnabled then continue end
+
+        pcall(function()
+            local knifeFound = false
+            local gunHolders = {}
+
+            -- Первичный скан инвентарей всех игроков на сервере
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character then
+                    if p.Backpack:FindFirstChild("Knife") or p.Character:FindFirstChild("Knife") then
+                        knifeFound = true
+                    end
+                    if p.Backpack:FindFirstChild("Gun") or p.Character:FindFirstChild("Gun") then
+                        table.insert(gunHolders, p)
+                    end
+                end
+            end
+
+            -- Автоматический сброс/определение изначального Шерифа при смене раундов
+            if not knifeFound and #gunHolders == 0 then
+                originalSheriff = nil -- Оружия нет, мы в Лобби
+            elseif #gunHolders > 0 and originalSheriff == nil then
+                originalSheriff = gunHolders[1].Name -- Первый зафиксированный владелец пистолета — Шериф
+            end
+
+            -- Собираем список текущих визуальных подсветок
+            local currentVisuals = {}
+            for _, hl in ipairs(espFolder:GetChildren()) do
+                if hl:IsA("Highlight") and hl.Adornee then
+                    currentVisuals[hl.Adornee] = hl
+                end
+            end
+
+            -- Отрисовка ESP с разделением по цветам
+            for _, p in ipairs(Players:GetPlayers()) do
+                if p ~= LocalPlayer and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+                    local char = p.Character
+                    
+                    -- По умолчанию все — Невинные (Зелёный)
+                    local color = Color3.fromRGB(34, 197, 94) 
+                    
+                    if p.Backpack:FindFirstChild("Knife") or char:FindFirstChild("Knife") then
+                        -- Убийца (Красный)
+                        color = Color3.fromRGB(239, 68, 68)
+                    elseif p.Backpack:FindFirstChild("Gun") or char:FindFirstChild("Gun") then
+                        if originalSheriff == p.Name then
+                            -- Шериф (Синий)
+                            color = Color3.fromRGB(59, 130, 246)
+                        else
+                            -- Герой, который подобрал ствол (Жёлтый!)
+                            color = Color3.fromRGB(234, 179, 8)
+                        end
+                    end
+
+                    -- Создаём или обновляем Highlight для игрока
+                    local hl = currentVisuals[char]
+                    if not hl then
+                        hl = Instance.new("Highlight")
+                        hl.Name = p.Name .. "_Highlight"
+                        hl.Adornee = char
+                        hl.Parent = espFolder
+                    end
+                    
+                    hl.FillColor = color
+                    hl.FillTransparency = 0.55
+                    hl.OutlineColor = color
+                    hl.OutlineTransparency = 0
+                    
+                    currentVisuals[char] = nil -- Игрок обработан, удалять его подсветку не нужно
+                end
+            end
+
+            -- Чистим подсветку тех, кто вышел или погиб
+            for char, hl in pairs(currentVisuals) do
+                hl:Destroy()
+            end
+        end)
+    end
+end)
+
+---------------------------------------------------------------------------
+-- ТЕМЫ И ИНФОРМАЦИЯ (Кастомизация окон хаба)
+---------------------------------------------------------------------------
+-- Настройка вкладки Theme
 local ThemePage = pages["Theme"]
 local ThemeGrid = Instance.new("UIGridLayout")
 ThemeGrid.CellSize = UDim2.new(0, 72, 0, 80)
@@ -493,7 +781,7 @@ createInfoLine("• Telegram: @vamatuk", 4)
 createInfoLine("• Discord: pavel_durak", 5)
 createInfoLine("──────────────────────────────────", 6)
 createInfoLine("🚀 ОТ РАЗРАБОТЧИКА", 7, true)
-createInfoLine("Скрипт полностью переведён на безопасный режим.", 8) -- Оставили только это предложение
+createInfoLine("Скрипт полностью переведён на безопасный режим.", 8)
 
 -- Меню безопасности при закрытии (ConfirmFrame)
 local ConfirmFrame = Instance.new("Frame")
@@ -568,6 +856,7 @@ CloseButton.MouseButton1Click:Connect(function()
 end)
 
 YesButton.MouseButton1Click:Connect(function()
+    espFolder:Destroy()
     PutinHub:Destroy()
 end)
 
