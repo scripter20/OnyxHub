@@ -1,7 +1,8 @@
---[[ PutinHub v3.7 – ЧАСТЬ 1 (без Hero, полное закрытие) ]]
+--[[ PutinHub v4.0 – ЧАСТЬ 1 (WalkSpeed, Jump, Noclip, Anti-AFK, Fly, FlySpeed) ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local VirtualUser = game:GetService("VirtualUser")
 local LocalPlayer = Players.LocalPlayer
 local Character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
 local PlayerGui = LocalPlayer:WaitForChild("PlayerGui")
@@ -17,10 +18,19 @@ local State = {
     ESP = false,
     ESPHighlights = {},
     ESPNames = {},
-    CleanupFunctions = {}, -- для очистки при закрытии
+    WalkSpeed = 16,
+    JumpPower = 50,
+    Noclip = false,
+    AntiAFK = false,
+    Fly = false,
+    FlySpeed = 22,
+    AntiAFKTask = nil,
+    NoclipHeartbeat = nil,
+    FlyHeartbeat = nil,
+    CleanupFunctions = {},
 }
 
--- === ПРОСТЫЕ РОЛИ (без Hero) ===
+-- === ПРОСТЫЕ РОЛИ ===
 local function IsMurderer(p)
     local c = p.Character
     if not c then return false end
@@ -69,7 +79,7 @@ end
 local function GetRoleColor(role)
     if role == "Murderer" then return Color3.fromRGB(255, 50, 50) end
     if role == "Sheriff" then return Color3.fromRGB(50, 150, 255) end
-    return Color3.fromRGB(50, 255, 50) -- Innocent
+    return Color3.fromRGB(50, 255, 50)
 end
 
 -- === ESP ===
@@ -113,7 +123,6 @@ local function UpdateESP()
     end
 end
 
--- Автообновление ESP
 local espUpdater = nil
 local function StartESPUpdater()
     if espUpdater then return end
@@ -128,10 +137,139 @@ local function StartESPUpdater()
     end)
 end
 
+-- === NOCLIP ===
+local function ApplyNoclip(state)
+    if not Character then return end
+    for _, part in ipairs(Character:GetDescendants()) do
+        if part:IsA("BasePart") then
+            part.CanCollide = not state
+        end
+    end
+end
+
+local function StartNoclip()
+    if State.NoclipHeartbeat then return end
+    State.NoclipHeartbeat = RunService.Heartbeat:Connect(function()
+        if State.Noclip and Character then
+            ApplyNoclip(true)
+        end
+    end)
+    table.insert(State.CleanupFunctions, function()
+        if State.NoclipHeartbeat then
+            State.NoclipHeartbeat:Disconnect()
+            State.NoclipHeartbeat = nil
+        end
+    end)
+end
+
+local function StopNoclip()
+    if State.NoclipHeartbeat then
+        State.NoclipHeartbeat:Disconnect()
+        State.NoclipHeartbeat = nil
+    end
+    ApplyNoclip(false)
+end
+
+-- === FLY ===
+local function StartFly()
+    if State.FlyHeartbeat then return end
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+    
+    local hrp = Character.HumanoidRootPart
+    local humanoid = Character:FindFirstChild("Humanoid")
+    if humanoid then
+        humanoid.PlatformStand = true
+    end
+    
+    State.FlyHeartbeat = RunService.Heartbeat:Connect(function()
+        if not State.Fly or not Character or not Character:FindFirstChild("HumanoidRootPart") then
+            return
+        end
+        
+        local hrp = Character.HumanoidRootPart
+        local moveDirection = Vector3.new(0, 0, 0)
+        
+        -- WASD + пробел/Shift
+        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
+            moveDirection = moveDirection + hrp.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
+            moveDirection = moveDirection - hrp.CFrame.LookVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
+            moveDirection = moveDirection - hrp.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
+            moveDirection = moveDirection + hrp.CFrame.RightVector
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
+            moveDirection = moveDirection + Vector3.new(0, 1, 0)
+        end
+        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
+            moveDirection = moveDirection - Vector3.new(0, 1, 0)
+        end
+        
+        if moveDirection.Magnitude > 0 then
+            hrp.Velocity = moveDirection.Unit * State.FlySpeed
+        else
+            hrp.Velocity = Vector3.new(0, 0, 0)
+        end
+    end)
+    
+    table.insert(State.CleanupFunctions, function()
+        if State.FlyHeartbeat then
+            State.FlyHeartbeat:Disconnect()
+            State.FlyHeartbeat = nil
+        end
+    end)
+end
+
+local function StopFly()
+    if State.FlyHeartbeat then
+        State.FlyHeartbeat:Disconnect()
+        State.FlyHeartbeat = nil
+    end
+    if Character and Character:FindFirstChild("Humanoid") then
+        Character.Humanoid.PlatformStand = false
+    end
+    if Character and Character:FindFirstChild("HumanoidRootPart") then
+        Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+    end
+end
+
+-- === ANTI‑AFK ===
+local function StartAntiAFK()
+    if State.AntiAFKTask then return end
+    State.AntiAFK = true
+    State.AntiAFKTask = task.spawn(function()
+        while State.AntiAFK do
+            task.wait(300)
+            pcall(function()
+                VirtualUser:CaptureController()
+                VirtualUser:ClickButton2(Vector2.new())
+            end)
+        end
+    end)
+    table.insert(State.CleanupFunctions, function()
+        if State.AntiAFKTask then
+            task.cancel(State.AntiAFKTask)
+            State.AntiAFKTask = nil
+        end
+    end)
+end
+
+local function StopAntiAFK()
+    State.AntiAFK = false
+    if State.AntiAFKTask then
+        task.cancel(State.AntiAFKTask)
+        State.AntiAFKTask = nil
+    end
+end
+
 -- === GUI ===
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 420, 0, 320)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
+MainFrame.Size = UDim2.new(0, 420, 0, 340)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -170)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
@@ -192,7 +330,7 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v3.7"
+SubTitle.Text = "v4.0"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -272,7 +410,7 @@ NoBtn.Parent = DialogFrame
 local NoCorner = Instance.new("UICorner")
 NoCorner.CornerRadius = UDim.new(0, 6)
 NoCorner.Parent = NoBtn
---[[ PutinHub v3.7 – ЧАСТЬ 2 ]]
+--[[ PutinHub v4.0 – ЧАСТЬ 2 ]]
 
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, -20, 0, 36)
@@ -324,32 +462,130 @@ InfoContent.BackgroundTransparency = 1
 InfoContent.Parent = ContentFrame
 InfoContent.Visible = false
 
-local function CreateToggle(text, stateKey, yPos, onFunc, offFunc)
-    local frame = Instance.new("Frame")
-    frame.Size = UDim2.new(1, -20, 0, 30)
-    frame.Position = UDim2.new(0, 10, 0, yPos)
-    frame.BackgroundTransparency = 1
-    frame.Parent = MainContent
+-- === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ GUI ===
+local function CreateSlider(panel, label, minVal, maxVal, step, stateKey, format, yPos, applyFunc)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, -20, 0, 45)
+    f.Position = UDim2.new(0, 10, 0, yPos)
+    f.BackgroundTransparency = 1
+    f.Parent = panel
 
     local lbl = Instance.new("TextLabel")
-    lbl.Size = UDim2.new(0, 130, 1, 0)
+    lbl.Size = UDim2.new(1, 0, 0, 18)
+    lbl.Position = UDim2.new(0, 0, 0, 0)
     lbl.BackgroundTransparency = 1
-    lbl.Text = text
+    lbl.Text = label .. ": " .. string.format(format or "%.1f", State[stateKey])
     lbl.TextColor3 = Color3.fromRGB(200, 255, 200)
-    lbl.TextSize = 14
+    lbl.TextSize = 13
     lbl.Font = Enum.Font.Gotham
     lbl.TextXAlignment = Enum.TextXAlignment.Left
-    lbl.Parent = frame
+    lbl.Parent = f
+
+    local bg = Instance.new("Frame")
+    bg.Size = UDim2.new(1, 0, 0, 5)
+    bg.Position = UDim2.new(0, 0, 0, 22)
+    bg.BackgroundColor3 = Color3.fromRGB(50, 70, 50)
+    bg.BorderSizePixel = 0
+    bg.Parent = f
+    local bgc = Instance.new("UICorner")
+    bgc.CornerRadius = UDim.new(1, 0)
+    bgc.Parent = bg
+
+    local fill = Instance.new("Frame")
+    fill.Size = UDim2.new(0, 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+    fill.BorderSizePixel = 0
+    fill.Parent = bg
+    local fc = Instance.new("UICorner")
+    fc.CornerRadius = UDim.new(1, 0)
+    fc.Parent = fill
+
+    local thumb = Instance.new("TextButton")
+    thumb.Size = UDim2.new(0, 16, 0, 16)
+    thumb.Position = UDim2.new(0, -8, 0.5, -8)
+    thumb.BackgroundColor3 = Color3.fromRGB(200, 255, 200)
+    thumb.Text = ""
+    thumb.BorderSizePixel = 0
+    thumb.Parent = bg
+    local tc = Instance.new("UICorner")
+    tc.CornerRadius = UDim.new(1, 0)
+    tc.Parent = thumb
+
+    local dragging = false
+    local function Update(val)
+        local clamped = math.clamp(val, minVal, maxVal)
+        local rounded = math.round(clamped / step) * step
+        State[stateKey] = rounded
+        local ratio = (rounded - minVal) / (maxVal - minVal)
+        thumb.Position = UDim2.new(ratio, -8, 0.5, -8)
+        fill.Size = UDim2.new(ratio, 0, 1, 0)
+        lbl.Text = label .. ": " .. string.format(format or "%.1f", rounded)
+        if applyFunc then applyFunc(rounded) end
+    end
+
+    Update(State[stateKey])
+
+    thumb.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+        end
+    end)
+    thumb.InputEnded:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+    UserInputService.InputChanged:Connect(function(i)
+        if (i.UserInputType == Enum.UserInputType.MouseMovement or i.UserInputType == Enum.UserInputType.Touch) and dragging then
+            local pos = i.Position
+            local absPos = bg.AbsolutePosition
+            local sizeX = bg.AbsoluteSize.X
+            local relX = math.clamp((pos.X - absPos.X) / sizeX, 0, 1)
+            local val = minVal + relX * (maxVal - minVal)
+            Update(val)
+        end
+    end)
+    bg.InputBegan:Connect(function(i)
+        if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then
+            if not dragging then
+                local pos = i.Position
+                local absPos = bg.AbsolutePosition
+                local sizeX = bg.AbsoluteSize.X
+                local relX = math.clamp((pos.X - absPos.X) / sizeX, 0, 1)
+                local val = minVal + relX * (maxVal - minVal)
+                Update(val)
+            end
+        end
+    end)
+    return f, yPos + 55
+end
+
+local function CreateToggle(panel, label, stateKey, yPos, onFunc, offFunc)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, -20, 0, 28)
+    f.Position = UDim2.new(0, 10, 0, yPos)
+    f.BackgroundTransparency = 1
+    f.Parent = panel
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(0, 150, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = label
+    l.TextColor3 = Color3.fromRGB(200, 255, 200)
+    l.TextSize = 13
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = f
 
     local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0, 55, 0, 24)
-    btn.Position = UDim2.new(1, -65, 0.5, -12)
+    btn.Size = UDim2.new(0, 55, 0, 22)
+    btn.Position = UDim2.new(1, -65, 0.5, -11)
     btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
     btn.Text = "OFF"
     btn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    btn.TextSize = 12
+    btn.TextSize = 11
     btn.Font = Enum.Font.GothamBold
-    btn.Parent = frame
+    btn.Parent = f
     local bc = Instance.new("UICorner")
     bc.CornerRadius = UDim.new(0, 6)
     bc.Parent = btn
@@ -366,9 +602,85 @@ local function CreateToggle(text, stateKey, yPos, onFunc, offFunc)
             if offFunc then offFunc() end
         end
     end)
+    return f, yPos + 33
 end
 
-CreateToggle("ESP Wallhack", "ESP", 10, function()
+-- === ЗАПОЛНЕНИЕ PLAYER ВКЛАДКИ ===
+local yP = 10
+-- WalkSpeed
+local _, yP = CreateSlider(PlayerContent, "Walk Speed", 1, 30, 0.5, "WalkSpeed", "%.1f", yP, function(val)
+    if Character and Character:FindFirstChild("Humanoid") then
+        Character.Humanoid.WalkSpeed = val
+    end
+end)
+-- JumpPower
+local _, yP = CreateSlider(PlayerContent, "Jump Power", 1, 200, 1, "JumpPower", "%.0f", yP, function(val)
+    if Character and Character:FindFirstChild("Humanoid") then
+        Character.Humanoid.JumpPower = val
+    end
+end)
+-- Noclip
+local _, yP = CreateToggle(PlayerContent, "Noclip", "Noclip", yP, function()
+    StartNoclip()
+    ApplyNoclip(true)
+end, function()
+    StopNoclip()
+end)
+-- Anti-AFK
+local _, yP = CreateToggle(PlayerContent, "Anti-AFK", "AntiAFK", yP, StartAntiAFK, StopAntiAFK)
+-- Fly
+local _, yP = CreateToggle(PlayerContent, "Fly", "Fly", yP, StartFly, StopFly)
+-- Fly Speed
+local _, yP = CreateSlider(PlayerContent, "Fly Speed", 1, 50, 0.5, "FlySpeed", "%.1f", yP, nil)
+
+-- === ЗАПОЛНЕНИЕ MAIN ВКЛАДКИ ===
+local yM = 10
+local function CreateToggleMain(label, stateKey, yPos, onFunc, offFunc)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, -20, 0, 28)
+    f.Position = UDim2.new(0, 10, 0, yPos)
+    f.BackgroundTransparency = 1
+    f.Parent = MainContent
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(0, 150, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = label
+    l.TextColor3 = Color3.fromRGB(200, 255, 200)
+    l.TextSize = 13
+    l.Font = Enum.Font.Gotham
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.Parent = f
+
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0, 55, 0, 22)
+    btn.Position = UDim2.new(1, -65, 0.5, -11)
+    btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+    btn.Text = "OFF"
+    btn.TextColor3 = Color3.fromRGB(255, 255, 255)
+    btn.TextSize = 11
+    btn.Font = Enum.Font.GothamBold
+    btn.Parent = f
+    local bc = Instance.new("UICorner")
+    bc.CornerRadius = UDim.new(0, 6)
+    bc.Parent = btn
+
+    btn.MouseButton1Click:Connect(function()
+        State[stateKey] = not State[stateKey]
+        if State[stateKey] then
+            btn.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+            btn.Text = "ON"
+            if onFunc then onFunc() end
+        else
+            btn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+            btn.Text = "OFF"
+            if offFunc then offFunc() end
+        end
+    end)
+    return f, yPos + 33
+end
+
+local _, yM = CreateToggleMain("ESP Wallhack", "ESP", yM, function()
     UpdateESP()
     StartESPUpdater()
 end, function()
@@ -379,10 +691,11 @@ end, function()
     if espUpdater then task.cancel(espUpdater); espUpdater = nil end
 end)
 
+-- === INFO ===
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v3.7\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v4.0\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
@@ -390,6 +703,7 @@ InfoLabel.TextXAlignment = Enum.TextXAlignment.Center
 InfoLabel.TextYAlignment = Enum.TextYAlignment.Center
 InfoLabel.Parent = InfoContent
 
+-- === ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ===
 local function ShowTab(tab)
     PlayerContent.Visible = false
     MainContent.Visible = false
@@ -418,8 +732,9 @@ end
 TabPlayer.MouseButton1Click:Connect(function() ShowTab("Player") end)
 TabMain.MouseButton1Click:Connect(function() ShowTab("Main") end)
 TabInfo.MouseButton1Click:Connect(function() ShowTab("Info") end)
-ShowTab("Main")
+ShowTab("Player")
 
+-- === КНОПКА ZOV ===
 local TopButton = Instance.new("TextButton")
 TopButton.Size = UDim2.new(0, 65, 0, 55)
 TopButton.Position = UDim2.new(0.5, -32, 0, 15)
@@ -489,6 +804,7 @@ TopButton.MouseButton1Click:Connect(function()
     MainFrame.Visible = guiVisible
 end)
 
+-- === ДИАЛОГ ЗАКРЫТИЯ ===
 local function ShowDialog()
     DialogFrame.Visible = true
     DialogFrame.BackgroundTransparency = 1
@@ -505,17 +821,16 @@ local function HideDialog()
     DialogFrame.Visible = false
 end
 
--- === ПОЛНАЯ ОЧИСТКА ПРИ ЗАКРЫТИИ ===
 local function CleanupAll()
-    -- Отключаем ESP
     State.ESP = false
     for _, v in pairs(State.ESPHighlights) do v:Destroy() end
     for _, v in pairs(State.ESPNames) do v:Destroy() end
     State.ESPHighlights = {}
     State.ESPNames = {}
     if espUpdater then task.cancel(espUpdater); espUpdater = nil end
-    
-    -- Очищаем все подключения
+    StopNoclip()
+    StopFly()
+    StopAntiAFK()
     for _, func in ipairs(State.CleanupFunctions) do
         pcall(func)
     end
@@ -556,17 +871,40 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
--- Автоматическая очистка при закрытии ScreenGui
 ScreenGui.AncestryChanged:Connect(function()
     if not ScreenGui.Parent then
         CleanupAll()
     end
 end)
 
--- Запуск
+-- === ЗАПУСК ===
 MainFrame.BackgroundTransparency = 1
 TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
     BackgroundTransparency = 0.1
 }):Play()
 
-print("[good]: PutinHub v3.7 – без Hero, полная очистка при закрытии.")
+-- Применяем начальные значения
+task.wait(0.5)
+if Character and Character:FindFirstChild("Humanoid") then
+    Character.Humanoid.WalkSpeed = State.WalkSpeed
+    Character.Humanoid.JumpPower = State.JumpPower
+end
+
+-- Обработка респавна
+LocalPlayer.CharacterAdded:Connect(function(newChar)
+    Character = newChar
+    task.wait(0.2)
+    if Character and Character:FindFirstChild("Humanoid") then
+        Character.Humanoid.WalkSpeed = State.WalkSpeed
+        Character.Humanoid.JumpPower = State.JumpPower
+    end
+    if State.Noclip then
+        StartNoclip()
+        ApplyNoclip(true)
+    end
+    if State.Fly then
+        StartFly()
+    end
+end)
+
+print("[good]: PutinHub v4.0 – WalkSpeed, JumpPower, Noclip, Anti-AFK, Fly, FlySpeed загружены.")
