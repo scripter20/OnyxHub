@@ -1,4 +1,4 @@
---[[ PutinHub v3.6 – ЧАСТЬ 1 ]]
+--[[ PutinHub v3.7 – ЧАСТЬ 1 (без Hero, полное закрытие) ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -17,11 +17,10 @@ local State = {
     ESP = false,
     ESPHighlights = {},
     ESPNames = {},
+    CleanupFunctions = {}, -- для очистки при закрытии
 }
 
--- === РОЛИ ===
-local RoleCache = {}
-
+-- === ПРОСТЫЕ РОЛИ (без Hero) ===
 local function IsMurderer(p)
     local c = p.Character
     if not c then return false end
@@ -41,7 +40,7 @@ local function IsMurderer(p)
     return false
 end
 
-local function HasGun(p)
+local function IsSheriff(p)
     local c = p.Character
     if not c then return false end
     for _, v in ipairs(c:GetDescendants()) do
@@ -60,137 +59,18 @@ local function HasGun(p)
     return false
 end
 
-local function UpdatePlayerRole(p)
-    if p == LocalPlayer then
-        RoleCache[p] = "Innocent"
-        return
-    end
-    if IsMurderer(p) then
-        RoleCache[p] = "Murderer"
-        return
-    end
-    if HasGun(p) then
-        if RoleCache[p] == nil then
-            RoleCache[p] = "Sheriff"
-            return
-        end
-        if RoleCache[p] == "Sheriff" then
-            return
-        end
-        RoleCache[p] = "Hero"
-        return
-    end
-    RoleCache[p] = "Innocent"
-end
-
 local function GetRole(p)
-    if RoleCache[p] == nil then
-        UpdatePlayerRole(p)
-    end
-    return RoleCache[p] or "Innocent"
+    if p == LocalPlayer then return "Innocent" end
+    if IsMurderer(p) then return "Murderer" end
+    if IsSheriff(p) then return "Sheriff" end
+    return "Innocent"
 end
 
 local function GetRoleColor(role)
     if role == "Murderer" then return Color3.fromRGB(255, 50, 50) end
     if role == "Sheriff" then return Color3.fromRGB(50, 150, 255) end
-    if role == "Hero" then return Color3.fromRGB(255, 215, 0) end
-    return Color3.fromRGB(50, 255, 50)
+    return Color3.fromRGB(50, 255, 50) -- Innocent
 end
-
--- === ТРЕКЕРЫ ОРУЖИЯ ===
-local WeaponTrackers = {}
-
-local function TrackWeapons(p)
-    if WeaponTrackers[p] then
-        for _, conn in ipairs(WeaponTrackers[p]) do
-            conn:Disconnect()
-        end
-        WeaponTrackers[p] = nil
-    end
-    
-    local trackers = {}
-    
-    local function OnWeaponChanged()
-        UpdatePlayerRole(p)
-        if State.ESP then UpdateESP() end
-    end
-    
-    local char = p.Character
-    if char then
-        local conn1 = char.ChildAdded:Connect(OnWeaponChanged)
-        local conn2 = char.ChildRemoved:Connect(OnWeaponChanged)
-        table.insert(trackers, conn1)
-        table.insert(trackers, conn2)
-    end
-    
-    local bp = p:FindFirstChild("Backpack")
-    if bp then
-        local conn3 = bp.ChildAdded:Connect(OnWeaponChanged)
-        local conn4 = bp.ChildRemoved:Connect(OnWeaponChanged)
-        table.insert(trackers, conn3)
-        table.insert(trackers, conn4)
-    end
-    
-    if #trackers > 0 then
-        WeaponTrackers[p] = trackers
-    end
-end
-
--- === СОБЫТИЯ ===
-local function OnPlayerAdded(p)
-    if p == LocalPlayer then return end
-    p.CharacterAdded:Connect(function()
-        task.wait(0.3)
-        UpdatePlayerRole(p)
-        TrackWeapons(p)
-        if State.ESP then UpdateESP() end
-    end)
-    if p.Character then
-        UpdatePlayerRole(p)
-        TrackWeapons(p)
-        if State.ESP then UpdateESP() end
-    end
-end
-
-Players.PlayerAdded:Connect(OnPlayerAdded)
-
-Players.PlayerRemoving:Connect(function(p)
-    RoleCache[p] = nil
-    if WeaponTrackers[p] then
-        for _, conn in ipairs(WeaponTrackers[p]) do
-            conn:Disconnect()
-        end
-        WeaponTrackers[p] = nil
-    end
-    if State.ESP then UpdateESP() end
-end)
-
-for _, p in ipairs(Players:GetPlayers()) do
-    if p ~= LocalPlayer then
-        p.CharacterAdded:Connect(function()
-            task.wait(0.3)
-            UpdatePlayerRole(p)
-            TrackWeapons(p)
-            if State.ESP then UpdateESP() end
-        end)
-        if p.Character then
-            UpdatePlayerRole(p)
-            TrackWeapons(p)
-        end
-    end
-end
-
-task.spawn(function()
-    while true do
-        task.wait(2)
-        for _, p in ipairs(Players:GetPlayers()) do
-            if p ~= LocalPlayer then
-                UpdatePlayerRole(p)
-            end
-        end
-        if State.ESP then UpdateESP() end
-    end
-end)
 
 -- === ESP ===
 local function UpdateESP()
@@ -233,7 +113,22 @@ local function UpdateESP()
     end
 end
 
--- === GUI (ДО ВКЛАДОК) ===
+-- Автообновление ESP
+local espUpdater = nil
+local function StartESPUpdater()
+    if espUpdater then return end
+    espUpdater = task.spawn(function()
+        while ScreenGui and ScreenGui.Parent do
+            if State.ESP then UpdateESP() end
+            task.wait(2)
+        end
+    end)
+    table.insert(State.CleanupFunctions, function()
+        if espUpdater then task.cancel(espUpdater); espUpdater = nil end
+    end)
+end
+
+-- === GUI ===
 local MainFrame = Instance.new("Frame")
 MainFrame.Size = UDim2.new(0, 420, 0, 320)
 MainFrame.Position = UDim2.new(0.5, -210, 0.5, -160)
@@ -297,7 +192,7 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v3.6"
+SubTitle.Text = "v3.7"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -377,7 +272,7 @@ NoBtn.Parent = DialogFrame
 local NoCorner = Instance.new("UICorner")
 NoCorner.CornerRadius = UDim.new(0, 6)
 NoCorner.Parent = NoBtn
---[[ PutinHub v3.6 – ЧАСТЬ 2 ]]
+--[[ PutinHub v3.7 – ЧАСТЬ 2 ]]
 
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, -20, 0, 36)
@@ -475,17 +370,19 @@ end
 
 CreateToggle("ESP Wallhack", "ESP", 10, function()
     UpdateESP()
+    StartESPUpdater()
 end, function()
     for _, v in pairs(State.ESPHighlights) do v:Destroy() end
     for _, v in pairs(State.ESPNames) do v:Destroy() end
     State.ESPHighlights = {}
     State.ESPNames = {}
+    if espUpdater then task.cancel(espUpdater); espUpdater = nil end
 end)
 
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v3.6\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v3.7\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
@@ -608,9 +505,27 @@ local function HideDialog()
     DialogFrame.Visible = false
 end
 
+-- === ПОЛНАЯ ОЧИСТКА ПРИ ЗАКРЫТИИ ===
+local function CleanupAll()
+    -- Отключаем ESP
+    State.ESP = false
+    for _, v in pairs(State.ESPHighlights) do v:Destroy() end
+    for _, v in pairs(State.ESPNames) do v:Destroy() end
+    State.ESPHighlights = {}
+    State.ESPNames = {}
+    if espUpdater then task.cancel(espUpdater); espUpdater = nil end
+    
+    -- Очищаем все подключения
+    for _, func in ipairs(State.CleanupFunctions) do
+        pcall(func)
+    end
+    State.CleanupFunctions = {}
+end
+
 CloseBtn.MouseButton1Click:Connect(ShowDialog)
 
 YesBtn.MouseButton1Click:Connect(function()
+    CleanupAll()
     ScreenGui:Destroy()
 end)
 
@@ -641,10 +556,17 @@ UserInputService.InputBegan:Connect(function(input, gameProcessed)
     end
 end)
 
+-- Автоматическая очистка при закрытии ScreenGui
+ScreenGui.AncestryChanged:Connect(function()
+    if not ScreenGui.Parent then
+        CleanupAll()
+    end
+end)
+
 -- Запуск
 MainFrame.BackgroundTransparency = 1
 TweenService:Create(MainFrame, TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
     BackgroundTransparency = 0.1
 }):Play()
 
-print("[good]: PutinHub v3.6 – стабильный ESP с динамическим обновлением.")
+print("[good]: PutinHub v3.7 – без Hero, полная очистка при закрытии.")
