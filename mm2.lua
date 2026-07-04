@@ -1,4 +1,4 @@
--- PutinHub Version: 3.9
+-- PutinHub Version: 3.9.1
 -- ЧАСТЬ 1 (Скопируй и вставь первой в свой файл на GitHub)
 
 local Players = game:GetService("Players")
@@ -321,7 +321,7 @@ local function updateTheme(themeName)
             stroke.Thickness = 2.5
         else
             stroke.Enabled = false
-        }
+        end -- Ошибка исправлена здесь!
     end
 
     -- Адаптация текстов внутри страниц Кастомизации и Инфо
@@ -487,7 +487,7 @@ end
 
 -- Выводим твои данные
 createInfoLine("📋 СВЕДЕНИЯ О СКРИПТЕ", 1, true)
-createInfoLine("• Версия: 3.9 (Kazakhstan Edition)", 2)
+createInfoLine("• Версия: 3.9.1 (Kazakhstan Edition)", 2)
 createInfoLine("• Created by: PavelDurak", 3)
 createInfoLine("• Telegram: @vamatuk", 4)
 createInfoLine("• Discord: pavel_durak", 5)
@@ -583,3 +583,4 @@ end)
 -- Первоначальный запуск интерфейса в дефолтном стиле
 updateTheme("Green")
 switchTab("Main")
+
