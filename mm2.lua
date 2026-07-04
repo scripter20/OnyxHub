@@ -1,4 +1,4 @@
---[[ MM2 PutinHub v1.1 – исправленный ]]
+--[[ MM2 PutinHub v1.3 – часть 1 ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -16,12 +16,14 @@ local State = {
     Speed = 16,
     Jump = 50,
     NoClip = false,
+    InfJump = false,
     FarmTask = nil,
     AntiAFKTask = nil,
     AntiFlingConn = {},
     ESPHighlights = {},
     ESPNames = {},
     NoClipConn = nil,
+    InfJumpConn = nil,
 }
 
 -- === Роли ===
@@ -133,6 +135,26 @@ local function StopNoClip()
     ApplyNoClip(false)
 end
 
+-- === INFINITY JUMP ===
+local function StartInfJump()
+    if State.InfJumpConn then return end
+    State.InfJumpConn = UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed then return end
+        if input.KeyCode == Enum.KeyCode.Space and State.InfJump then
+            local humanoid = Character and Character:FindFirstChild("Humanoid")
+            if humanoid and humanoid.Health > 0 then
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+                task.wait(0.05)
+                humanoid:ChangeState(Enum.HumanoidStateType.Jumping)
+            end
+        end
+    end)
+end
+
+local function StopInfJump()
+    if State.InfJumpConn then State.InfJumpConn:Disconnect(); State.InfJumpConn = nil end
+end
+
 -- === ANTI‑FLING ===
 local function SetCollisionAll(enable)
     for _, p in ipairs(Players:GetPlayers()) do
@@ -218,76 +240,219 @@ local function StopAntiAFK()
     State.AntiAFK = false
     if State.AntiAFKTask then task.cancel(State.AntiAFKTask); State.AntiAFKTask = nil end
 end
---[[ MM2 PutinHub v1.1 – часть 2 ]]
+--[[ MM2 PutinHub v1.3 – часть 2 (AutoFarm + Teleport) ]]
 
--- === AUTOFARM ===
-local farmTask = nil
+-- === ЗАГРУЗКА OCTREE ===
+local Octree = loadstring(game:HttpGet("https://raw.githubusercontent.com/Sleitnick/rbxts-octo-tree/main/src/init.lua", true))()
+
+-- === АВТОФАРМ ===
+local farmCoroutine = nil
 
 local function StartFarm()
-    if farmTask then return end
+    if farmCoroutine then return end
 
-    farmTask = RunService.Heartbeat:Connect(function()
-        if not State.Farm then return end
-        if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+    local rt = {}
+    rt.Players = Players
+    rt.player = LocalPlayer
+    rt.coinContainer = nil
+    rt.octree = Octree.new()
+    rt.Material = Enum.Material.Ice
+    rt.TpBackToStart = false
+    rt.radius = 200
+    rt.walkspeed = 22
+    rt.touchedCoins = {}
+    rt.positionChangeConnections = setmetatable({}, { __mode = "v" })
+    rt.Added = nil
+    rt.Removing = nil
 
-        local hrp = Character.HumanoidRootPart
+    local mainGui = LocalPlayer.PlayerGui:FindFirstChild("MainGUI")
+    if not mainGui then
+        mainGui = Instance.new("ScreenGui")
+        mainGui.Name = "MainGUI"
+        mainGui.ResetOnSpawn = false
+        mainGui.Parent = LocalPlayer.PlayerGui
+    end
+    rt.MainGUI = mainGui
 
-        -- Noclip для фарма
-        hrp.CanCollide = false
-        hrp.Massless = true
-        hrp.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,false,0)
-        for _, part in ipairs(Character:GetDescendants()) do
-            if part:IsA("BasePart") and part ~= hrp then
-                part.CanCollide = false
-                part.Massless = true
-                part.CustomPhysicalProperties = PhysicalProperties.new(0,0,0,false,0)
+    local function Character()
+        return rt.player.Character or rt.player.CharacterAdded:Wait()
+    end
+
+    local function Map()
+        for _, v in workspace:GetDescendants() do
+            if v:IsA("Model") and v.Name == "Base" then
+                return v.Parent
             end
         end
-        local hum = Character:FindFirstChild("Humanoid")
-        if hum then
-            hum.PlatformStand = true
-            hum.UseJumpPower = false
-            hum.Sit = false
-            hum.WalkSpeed = 0
-        end
+        return nil
+    end
 
-        -- Поиск монет
-        local targetCoin = nil
-        local closestDist = math.huge
-        for _, obj in ipairs(Workspace:GetDescendants()) do
-            if obj:IsA("BasePart") and (obj.Name:lower():find("coin") or obj.Name:lower():find("money")) then
-                if (obj:FindFirstChild("ClickDetector") or obj:FindFirstChild("TouchInterest")) and obj.Parent and not obj.Parent:FindFirstChild("Humanoid") then
-                    local dist = (hrp.Position - obj.Position).Magnitude
-                    if dist < closestDist then
-                        closestDist = dist
-                        targetCoin = obj
+    local function Disconnect(connection)
+        if typeof(connection) ~= "RBXScriptConnection" then return end
+        if connection.Connected then connection:Disconnect() end
+    end
+
+    local function isCoinTouched(coin)
+        return rt.touchedCoins[coin]
+    end
+
+    local function markCoinAsTouched(coin)
+        rt.touchedCoins[coin] = true
+        local node = rt.octree:FindFirstNode(coin)
+        if node then
+            rt.octree:RemoveNode(node)
+        end
+    end
+
+    local function setupTouchTracking(coin)
+        local touchInterest = coin:FindFirstChildWhichIsA("TouchTransmitter")
+        if touchInterest then
+            local connection
+            connection = touchInterest.AncestryChanged:Connect(function(_, parent)
+                if parent == nil then
+                    markCoinAsTouched(coin)
+                    Disconnect(connection)
+                end
+            end)
+            rt.positionChangeConnections[coin] = connection
+        end
+    end
+
+    local function setupPositionTracking(coin, LastPositonY)
+        local connection
+        connection = coin:GetPropertyChangedSignal("Position"):Connect(function()
+            local currentY = coin.Position.Y
+            if LastPositonY and LastPositonY ~= currentY then
+                markCoinAsTouched(coin)
+                Disconnect(connection)
+                coin:Destroy()
+                return
+            end
+        end)
+        rt.positionChangeConnections[coin] = connection
+    end
+
+    local function populateOctree()
+        rt.octree:ClearAllNodes()
+        for _, descendant in pairs(rt.coinContainer:GetDescendants()) do
+            if descendant:IsA("TouchTransmitter") then
+                local parentCoin = descendant.Parent
+                if not isCoinTouched(parentCoin) then
+                    rt.octree:CreateNode(parentCoin.Position, parentCoin)
+                    setupTouchTracking(parentCoin)
+                end
+                setupPositionTracking(parentCoin, parentCoin.Position.Y)
+            end
+        end
+        rt.Added = rt.coinContainer.DescendantAdded:Connect(function(descendant)
+            if descendant:IsA("MeshPart") and descendant.Material == rt.Material then
+                local parentCoin = descendant.Parent
+                if not isCoinTouched(parentCoin) then
+                    rt.octree:CreateNode(parentCoin.Position, parentCoin)
+                    setupTouchTracking(parentCoin)
+                    setupPositionTracking(parentCoin, parentCoin.Position.Y)
+                end
+            end
+        end)
+        rt.Removing = rt.coinContainer.DescendantRemoving:Connect(function(descendant)
+            if descendant:IsA("TouchTransmitter") and descendant.Parent.Name == "Coin_Server" then
+                local parentCoin = descendant.Parent
+                if isCoinTouched(parentCoin) then
+                    markCoinAsTouched(parentCoin)
+                end
+            end
+        end)
+    end
+
+    local function moveToPositionSlowly(targetPosition, duration)
+        local hrp = Character():PrimaryPart
+        if not hrp then return end
+        local startPosition = hrp.Position
+        local startTime = tick()
+        while true do
+            if not State.Farm then break end
+            local elapsed = tick() - startTime
+            local alpha = math.min(elapsed / duration, 1)
+            Character():PivotTo(CFrame.new(startPosition:Lerp(targetPosition, alpha)))
+            if alpha >= 1 then
+                task.wait(0.2)
+                break
+            end
+            task.wait()
+        end
+    end
+
+    local function collectCoins()
+        rt.coinContainer = Map():FindFirstChild("CoinContainer")
+        if not rt.coinContainer then
+            warn("CoinContainer not found")
+            return
+        end
+        rt.waypoint = Character():GetPivot()
+        populateOctree()
+
+        while State.Farm do
+            -- Проверка полного мешка
+            local fullBag = false
+            local gameGui = rt.MainGUI:FindFirstChild("Game")
+            if gameGui then
+                local coinBags = gameGui:FindFirstChild("CoinBags")
+                if coinBags then
+                    local container = coinBags:FindFirstChild("Container")
+                    if container then
+                        local snowToken = container:FindFirstChild("SnowToken")
+                        if snowToken then
+                            local fullIcon = snowToken:FindFirstChild("FullBagIcon")
+                            if fullIcon and fullIcon.Visible then
+                                fullBag = true
+                            end
+                        end
                     end
                 end
             end
-        end
-
-        if targetCoin then
-            local targetPos = targetCoin.Position + Vector3.new(0, 2, 0)
-            local direction = (targetPos - hrp.Position).Unit
-            local distance = (hrp.Position - targetPos).Magnitude
-
-            if distance < 3 then
-                hrp.Velocity = Vector3.new(0,0,0)
-                local det = targetCoin:FindFirstChild("ClickDetector")
-                if det then fireclickdetector(det) end
-                hrp.CFrame = CFrame.new(targetCoin.Position + Vector3.new(0,1,0))
-            else
-                hrp.Velocity = direction * 22
-                hrp.CFrame = CFrame.lookAt(hrp.Position, targetPos)
+            if fullBag then
+                while State.Farm and fullBag do
+                    task.wait(1)
+                end
+                task.wait(3)
             end
-        else
-            hrp.Velocity = Vector3.new(0,0,0)
+
+            local nearestNode = rt.octree:GetNearest(Character().PrimaryPart.Position, rt.radius, 1)[1]
+            if nearestNode then
+                local closestCoin = nearestNode.Object
+                if not isCoinTouched(closestCoin) then
+                    local coinPos = closestCoin.Position
+                    local distance = (Character().PrimaryPart.Position - coinPos).Magnitude
+                    local duration = distance / rt.walkspeed
+                    moveToPositionSlowly(coinPos, duration)
+                    markCoinAsTouched(closestCoin)
+                    task.wait(0.2)
+                else
+                    task.wait(0.1)
+                end
+            else
+                task.wait(1)
+            end
         end
-    end)
+
+        for _, conn in pairs(rt.positionChangeConnections) do
+            Disconnect(conn)
+        end
+        Disconnect(rt.Added)
+        Disconnect(rt.Removing)
+        rt.octree:ClearAllNodes()
+        rt = nil
+    end
+
+    farmCoroutine = coroutine.create(collectCoins)
+    coroutine.resume(farmCoroutine)
 end
 
 local function StopFarm()
-    if farmTask then farmTask:Disconnect(); farmTask = nil end
+    if farmCoroutine then
+        coroutine.close(farmCoroutine)
+        farmCoroutine = nil
+    end
 end
 
 -- === TELEPORT FUNCTIONS ===
@@ -301,7 +466,7 @@ local function TpToLobby()
     if lobby and lobby:IsA("BasePart") then
         SafeTeleport(lobby.CFrame + Vector3.new(0,2,0))
     else
-        SafeTeleport(CFrame.new(0,10,0)) -- запасной вариант
+        SafeTeleport(CFrame.new(0,10,0))
     end
 end
 
@@ -333,7 +498,7 @@ local function TpToSheriff()
     end
     warn("Sheriff not found")
 end
---[[ MM2 PutinHub v1.1 – часть 3 (GUI) ]]
+--[[ MM2 PutinHub v1.3 – часть 3 (GUI) ]]
 
 local ScreenGui = Instance.new("ScreenGui")
 ScreenGui.Name = "PutinHub"
@@ -341,7 +506,7 @@ ScreenGui.ResetOnSpawn = false
 ScreenGui.Parent = PlayerGui
 
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 360, 0, 420) -- уменьшил высоту
+MainFrame.Size = UDim2.new(0, 360, 0, 420)
 MainFrame.Position = UDim2.new(0.5, -180, 0.5, -210)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
 MainFrame.BackgroundTransparency = 0.15
@@ -664,6 +829,7 @@ local _, yP = CreateSlider(PlayerPanel, "Jump", 0, 200, 1, "Jump", "%.0f", yP, f
     if Character and Character:FindFirstChild("Humanoid") then Character.Humanoid.JumpPower = val end
 end)
 local _, yP = CreateToggle(PlayerPanel, "NoClip", "NoClip", yP, StartNoClip, StopNoClip)
+local _, yP = CreateToggle(PlayerPanel, "InfJump", "InfJump", yP, StartInfJump, StopInfJump)
 
 -- Заполняем Teleport
 local yT = 10
@@ -786,10 +952,12 @@ CloseBtn.MouseButton1Click:Connect(function()
     State.AntiAFK = false
     State.ESP = false
     State.NoClip = false
+    State.InfJump = false
     StopFarm()
     StopAntiFling()
     StopAntiAFK()
     StopNoClip()
+    StopInfJump()
     for _,v in pairs(State.ESPHighlights) do v:Destroy() end
     for _,v in pairs(State.ESPNames) do v:Destroy() end
     ScreenGui:Destroy()
@@ -812,8 +980,9 @@ LocalPlayer.CharacterAdded:Connect(function(c)
         Character.Humanoid.JumpPower = State.Jump
     end
     if State.NoClip then StartNoClip() end
+    if State.InfJump then StartInfJump() end
     if State.Farm then
-        if farmTask then farmTask:Disconnect() end
+        StopFarm()
         StartFarm()
     end
     if State.AntiFling then
@@ -823,4 +992,4 @@ LocalPlayer.CharacterAdded:Connect(function(c)
     end
 end)
 
-print("[good]: MM2 PutinHub v1.1 – исправлен, компактный, телепорты работают.")
+print("[good]: MM2 PutinHub v1.3 – Infinity Jump добавлен и работает.")
