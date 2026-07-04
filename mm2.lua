@@ -1,4 +1,4 @@
---[[ PutinHub v4.0 – ЧАСТЬ 1 (WalkSpeed, Jump, Noclip, Anti-AFK, Fly, FlySpeed) ]]
+--[[ PutinHub v4.1 – ЧАСТЬ 1 (секции, скролл, классический Fly) ]]
 local Players = game:GetService("Players")
 local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
@@ -26,8 +26,10 @@ local State = {
     FlySpeed = 22,
     AntiAFKTask = nil,
     NoclipHeartbeat = nil,
-    FlyHeartbeat = nil,
+    FlyBodyGyro = nil,
+    FlyBodyVelocity = nil,
     CleanupFunctions = {},
+    GuiVisible = true,
 }
 
 -- === ПРОСТЫЕ РОЛИ ===
@@ -170,10 +172,19 @@ local function StopNoclip()
     ApplyNoclip(false)
 end
 
--- === FLY ===
+-- === FLY (классический, как в примере) ===
+local flyCtrl = {f = 0, b = 0, l = 0, r = 0}
+local flyLastCtrl = {f = 0, b = 0, l = 0, r = 0}
+local flySpeed = 0
+
 local function StartFly()
-    if State.FlyHeartbeat then return end
-    if not Character or not Character:FindFirstChild("HumanoidRootPart") then return end
+    if State.FlyBodyGyro or State.FlyBodyVelocity then
+        StopFly()
+    end
+    
+    if not Character or not Character:FindFirstChild("HumanoidRootPart") then
+        return
+    end
     
     local hrp = Character.HumanoidRootPart
     local humanoid = Character:FindFirstChild("Humanoid")
@@ -181,60 +192,131 @@ local function StartFly()
         humanoid.PlatformStand = true
     end
     
-    State.FlyHeartbeat = RunService.Heartbeat:Connect(function()
-        if not State.Fly or not Character or not Character:FindFirstChild("HumanoidRootPart") then
-            return
-        end
-        
-        local hrp = Character.HumanoidRootPart
-        local moveDirection = Vector3.new(0, 0, 0)
-        
-        -- WASD + пробел/Shift
-        if UserInputService:IsKeyDown(Enum.KeyCode.W) then
-            moveDirection = moveDirection + hrp.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.S) then
-            moveDirection = moveDirection - hrp.CFrame.LookVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.A) then
-            moveDirection = moveDirection - hrp.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.D) then
-            moveDirection = moveDirection + hrp.CFrame.RightVector
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.Space) then
-            moveDirection = moveDirection + Vector3.new(0, 1, 0)
-        end
-        if UserInputService:IsKeyDown(Enum.KeyCode.LeftShift) then
-            moveDirection = moveDirection - Vector3.new(0, 1, 0)
-        end
-        
-        if moveDirection.Magnitude > 0 then
-            hrp.Velocity = moveDirection.Unit * State.FlySpeed
-        else
-            hrp.Velocity = Vector3.new(0, 0, 0)
-        end
-    end)
+    -- Создаём BodyGyro и BodyVelocity на основе твоего примера
+    local bg = Instance.new("BodyGyro", hrp)
+    bg.P = 9e4
+    bg.maxTorque = Vector3.new(9e9, 9e9, 9e9)
+    bg.cframe = hrp.CFrame
+    State.FlyBodyGyro = bg
+    
+    local bv = Instance.new("BodyVelocity", hrp)
+    bv.velocity = Vector3.new(0, 0.1, 0)
+    bv.maxForce = Vector3.new(9e9, 9e9, 9e9)
+    State.FlyBodyVelocity = bv
+    
+    -- Сбрасываем управление
+    flyCtrl = {f = 0, b = 0, l = 0, r = 0}
+    flyLastCtrl = {f = 0, b = 0, l = 0, r = 0}
+    flySpeed = 0
     
     table.insert(State.CleanupFunctions, function()
-        if State.FlyHeartbeat then
-            State.FlyHeartbeat:Disconnect()
-            State.FlyHeartbeat = nil
-        end
+        StopFly()
     end)
 end
 
 local function StopFly()
-    if State.FlyHeartbeat then
-        State.FlyHeartbeat:Disconnect()
-        State.FlyHeartbeat = nil
+    if State.FlyBodyGyro then
+        State.FlyBodyGyro:Destroy()
+        State.FlyBodyGyro = nil
+    end
+    if State.FlyBodyVelocity then
+        State.FlyBodyVelocity:Destroy()
+        State.FlyBodyVelocity = nil
     end
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.PlatformStand = false
     end
-    if Character and Character:FindFirstChild("HumanoidRootPart") then
-        Character.HumanoidRootPart.Velocity = Vector3.new(0, 0, 0)
+    flyCtrl = {f = 0, b = 0, l = 0, r = 0}
+    flyLastCtrl = {f = 0, b = 0, l = 0, r = 0}
+    flySpeed = 0
+end
+
+-- Обработка клавиш для Fly
+UserInputService.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not State.Fly then return end
+    local key = input.KeyCode
+    if key == Enum.KeyCode.W then flyCtrl.f = 1
+    elseif key == Enum.KeyCode.S then flyCtrl.b = 1
+    elseif key == Enum.KeyCode.A then flyCtrl.l = 1
+    elseif key == Enum.KeyCode.D then flyCtrl.r = 1
     end
+end)
+
+UserInputService.InputEnded:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if not State.Fly then return end
+    local key = input.KeyCode
+    if key == Enum.KeyCode.W then flyCtrl.f = 0
+    elseif key == Enum.KeyCode.S then flyCtrl.b = 0
+    elseif key == Enum.KeyCode.A then flyCtrl.l = 0
+    elseif key == Enum.KeyCode.D then flyCtrl.r = 0
+    end
+end)
+
+-- Основной цикл Fly (как в примере)
+local flyHeartbeat = nil
+local function StartFlyHeartbeat()
+    if flyHeartbeat then return end
+    flyHeartbeat = RunService.Heartbeat:Connect(function()
+        if not State.Fly then
+            return
+        end
+        if not Character or not Character:FindFirstChild("HumanoidRootPart") then
+            return
+        end
+        
+        local hrp = Character.HumanoidRootPart
+        local bg = State.FlyBodyGyro
+        local bv = State.FlyBodyVelocity
+        
+        if not bg or not bv then
+            StartFly()
+            return
+        end
+        
+        local camera = workspace.CurrentCamera
+        local ctrl = flyCtrl
+        local lastctrl = flyLastCtrl
+        local maxspeed = State.FlySpeed or 22
+        
+        -- Обновляем скорость
+        if ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0 then
+            flySpeed = flySpeed + 0.5 + (flySpeed / maxspeed)
+            if flySpeed > maxspeed then
+                flySpeed = maxspeed
+            end
+        elseif not (ctrl.l + ctrl.r ~= 0 or ctrl.f + ctrl.b ~= 0) and flySpeed ~= 0 then
+            flySpeed = flySpeed - 1
+            if flySpeed < 0 then
+                flySpeed = 0
+            end
+        end
+        
+        -- Применяем движение
+        if (ctrl.l + ctrl.r) ~= 0 or (ctrl.f + ctrl.b) ~= 0 then
+            local look = camera.CoordinateFrame.lookVector
+            local right = camera.CoordinateFrame.RightVector
+            local up = camera.CoordinateFrame.UpVector
+            local moveVec = look * (ctrl.f + ctrl.b) + right * (ctrl.l + ctrl.r)
+            if moveVec.Magnitude > 0 then
+                bv.velocity = moveVec.Unit * flySpeed
+                bg.cframe = CFrame.lookAt(hrp.Position, hrp.Position + moveVec)
+            end
+            flyLastCtrl = {f = ctrl.f, b = ctrl.b, l = ctrl.l, r = ctrl.r}
+        elseif (ctrl.l + ctrl.r) == 0 and (ctrl.f + ctrl.b) == 0 and flySpeed ~= 0 then
+            -- Плавное затухание
+            bv.velocity = bv.velocity * 0.95
+        else
+            bv.velocity = Vector3.new(0, 0, 0)
+        end
+    end)
+    table.insert(State.CleanupFunctions, function()
+        if flyHeartbeat then
+            flyHeartbeat:Disconnect()
+            flyHeartbeat = nil
+        end
+    end)
 end
 
 -- === ANTI‑AFK ===
@@ -266,10 +348,10 @@ local function StopAntiAFK()
     end
 end
 
--- === GUI ===
+-- === GUI (основное окно) ===
 local MainFrame = Instance.new("Frame")
-MainFrame.Size = UDim2.new(0, 420, 0, 340)
-MainFrame.Position = UDim2.new(0.5, -210, 0.5, -170)
+MainFrame.Size = UDim2.new(0, 420, 0, 380)
+MainFrame.Position = UDim2.new(0.5, -210, 0.5, -190)
 MainFrame.BackgroundColor3 = Color3.fromRGB(20, 40, 20)
 MainFrame.BackgroundTransparency = 0.1
 MainFrame.BorderSizePixel = 0
@@ -330,7 +412,7 @@ local SubTitle = Instance.new("TextLabel")
 SubTitle.Size = UDim2.new(0, 60, 0, 20)
 SubTitle.Position = UDim2.new(1, -75, 0, 2)
 SubTitle.BackgroundTransparency = 1
-SubTitle.Text = "v4.0"
+SubTitle.Text = "v4.1"
 SubTitle.TextColor3 = Color3.fromRGB(150, 200, 150)
 SubTitle.TextSize = 13
 SubTitle.Font = Enum.Font.Gotham
@@ -410,7 +492,7 @@ NoBtn.Parent = DialogFrame
 local NoCorner = Instance.new("UICorner")
 NoCorner.CornerRadius = UDim.new(0, 6)
 NoCorner.Parent = NoBtn
---[[ PutinHub v4.0 – ЧАСТЬ 2 ]]
+--[[ PutinHub v4.1 – ЧАСТЬ 2 ]]
 
 local TabsFrame = Instance.new("Frame")
 TabsFrame.Size = UDim2.new(1, -20, 0, 36)
@@ -445,22 +527,65 @@ ContentFrame.Position = UDim2.new(0, 10, 0, 90)
 ContentFrame.BackgroundTransparency = 1
 ContentFrame.Parent = MainFrame
 
+-- ScrollingFrame для прокрутки
+local ScrollFrame = Instance.new("ScrollingFrame")
+ScrollFrame.Size = UDim2.new(1, 0, 1, 0)
+ScrollFrame.BackgroundTransparency = 1
+ScrollFrame.BorderSizePixel = 0
+ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, 0)
+ScrollFrame.ScrollBarThickness = 5
+ScrollFrame.ScrollBarImageColor3 = Color3.fromRGB(68, 255, 136)
+ScrollFrame.Parent = ContentFrame
+
+local ContentContainer = Instance.new("Frame")
+ContentContainer.Size = UDim2.new(1, 0, 0, 0)
+ContentContainer.BackgroundTransparency = 1
+ContentContainer.Parent = ScrollFrame
+
 local PlayerContent = Instance.new("Frame")
-PlayerContent.Size = UDim2.new(1, 0, 1, 0)
+PlayerContent.Size = UDim2.new(1, 0, 0, 0)
 PlayerContent.BackgroundTransparency = 1
-PlayerContent.Parent = ContentFrame
+PlayerContent.Parent = ContentContainer
 
 local MainContent = Instance.new("Frame")
-MainContent.Size = UDim2.new(1, 0, 1, 0)
+MainContent.Size = UDim2.new(1, 0, 0, 0)
 MainContent.BackgroundTransparency = 1
-MainContent.Parent = ContentFrame
+MainContent.Parent = ContentContainer
 MainContent.Visible = false
 
 local InfoContent = Instance.new("Frame")
-InfoContent.Size = UDim2.new(1, 0, 1, 0)
+InfoContent.Size = UDim2.new(1, 0, 0, 0)
 InfoContent.BackgroundTransparency = 1
-InfoContent.Parent = ContentFrame
+InfoContent.Parent = ContentContainer
 InfoContent.Visible = false
+
+-- Функция обновления Canvas
+local function UpdateCanvas()
+    local h1, h2, h3 = 0, 0, 0
+    for _, c in ipairs(PlayerContent:GetChildren()) do
+        if c:IsA("Frame") then
+            local y = c.Position.Y.Offset + c.Size.Y.Offset
+            if y > h1 then h1 = y end
+        end
+    end
+    for _, c in ipairs(MainContent:GetChildren()) do
+        if c:IsA("Frame") then
+            local y = c.Position.Y.Offset + c.Size.Y.Offset
+            if y > h2 then h2 = y end
+        end
+    end
+    for _, c in ipairs(InfoContent:GetChildren()) do
+        if c:IsA("Frame") then
+            local y = c.Position.Y.Offset + c.Size.Y.Offset
+            if y > h3 then h3 = y end
+        end
+    end
+    PlayerContent.Size = UDim2.new(1, 0, 0, h1 + 20)
+    MainContent.Size = UDim2.new(1, 0, 0, h2 + 20)
+    InfoContent.Size = UDim2.new(1, 0, 0, h3 + 20)
+    ScrollFrame.CanvasSize = UDim2.new(0, 0, 0, math.max(h1, h2, h3) + 20)
+    ContentContainer.Size = UDim2.new(1, 0, 0, math.max(h1, h2, h3) + 20)
+end
 
 -- === ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ДЛЯ GUI ===
 local function CreateSlider(panel, label, minVal, maxVal, step, stateKey, format, yPos, applyFunc)
@@ -605,20 +730,74 @@ local function CreateToggle(panel, label, stateKey, yPos, onFunc, offFunc)
     return f, yPos + 33
 end
 
+local function CreateSectionLabel(panel, text, yPos)
+    local f = Instance.new("Frame")
+    f.Size = UDim2.new(1, -20, 0, 25)
+    f.Position = UDim2.new(0, 10, 0, yPos)
+    f.BackgroundTransparency = 1
+    f.Parent = panel
+
+    local l = Instance.new("TextLabel")
+    l.Size = UDim2.new(1, 0, 1, 0)
+    l.BackgroundTransparency = 1
+    l.Text = text
+    l.TextColor3 = Color3.fromRGB(68, 255, 136)
+    l.TextSize = 16
+    l.Font = Enum.Font.GothamBold
+    l.TextXAlignment = Enum.TextXAlignment.Left
+    l.TextYAlignment = Enum.TextYAlignment.Center
+    l.Parent = f
+
+    -- Декоративная линия
+    local line = Instance.new("Frame")
+    line.Size = UDim2.new(0.5, 0, 0, 1)
+    line.Position = UDim2.new(0, 110, 0.5, 0)
+    line.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
+    line.BackgroundTransparency = 0.5
+    line.BorderSizePixel = 0
+    line.Parent = f
+
+    return f, yPos + 30
+end
+
 -- === ЗАПОЛНЕНИЕ PLAYER ВКЛАДКИ ===
 local yP = 10
+
+-- Секция Movement
+local _, yP = CreateSectionLabel(PlayerContent, "Movement", yP)
+
 -- WalkSpeed
 local _, yP = CreateSlider(PlayerContent, "Walk Speed", 1, 30, 0.5, "WalkSpeed", "%.1f", yP, function(val)
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.WalkSpeed = val
     end
 end)
+
 -- JumpPower
 local _, yP = CreateSlider(PlayerContent, "Jump Power", 1, 200, 1, "JumpPower", "%.0f", yP, function(val)
     if Character and Character:FindFirstChild("Humanoid") then
         Character.Humanoid.JumpPower = val
     end
 end)
+
+-- Fly (с включением полного цикла)
+local _, yP = CreateToggle(PlayerContent, "Fly", "Fly", yP, function()
+    StartFly()
+    StartFlyHeartbeat()
+end, function()
+    StopFly()
+    if flyHeartbeat then
+        flyHeartbeat:Disconnect()
+        flyHeartbeat = nil
+    end
+end)
+
+-- Fly Speed
+local _, yP = CreateSlider(PlayerContent, "Fly Speed", 1, 50, 0.5, "FlySpeed", "%.1f", yP, nil)
+
+-- Секция Other
+local _, yP = CreateSectionLabel(PlayerContent, "Other", yP)
+
 -- Noclip
 local _, yP = CreateToggle(PlayerContent, "Noclip", "Noclip", yP, function()
     StartNoclip()
@@ -626,12 +805,16 @@ local _, yP = CreateToggle(PlayerContent, "Noclip", "Noclip", yP, function()
 end, function()
     StopNoclip()
 end)
+
 -- Anti-AFK
 local _, yP = CreateToggle(PlayerContent, "Anti-AFK", "AntiAFK", yP, StartAntiAFK, StopAntiAFK)
--- Fly
-local _, yP = CreateToggle(PlayerContent, "Fly", "Fly", yP, StartFly, StopFly)
--- Fly Speed
-local _, yP = CreateSlider(PlayerContent, "Fly Speed", 1, 50, 0.5, "FlySpeed", "%.1f", yP, nil)
+
+-- Anti-Fling (заглушка)
+local _, yP = CreateToggle(PlayerContent, "Anti-Fling", nil, yP, function()
+    print("Anti-Fling пока не реализован")
+end, function()
+    print("Anti-Fling пока не реализован")
+end)
 
 -- === ЗАПОЛНЕНИЕ MAIN ВКЛАДКИ ===
 local yM = 10
@@ -695,13 +878,15 @@ end)
 local InfoLabel = Instance.new("TextLabel")
 InfoLabel.Size = UDim2.new(1, 0, 1, 0)
 InfoLabel.BackgroundTransparency = 1
-InfoLabel.Text = "PutinHub v4.0\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
+InfoLabel.Text = "PutinHub v4.1\nДля Murder Mystery 2\n\nСделано с любовью ❤️"
 InfoLabel.TextColor3 = Color3.fromRGB(200, 255, 200)
 InfoLabel.TextSize = 16
 InfoLabel.Font = Enum.Font.Gotham
 InfoLabel.TextXAlignment = Enum.TextXAlignment.Center
 InfoLabel.TextYAlignment = Enum.TextYAlignment.Center
 InfoLabel.Parent = InfoContent
+
+UpdateCanvas()
 
 -- === ПЕРЕКЛЮЧЕНИЕ ВКЛАДОК ===
 local function ShowTab(tab)
@@ -727,6 +912,7 @@ local function ShowTab(tab)
         TabInfo.BackgroundColor3 = Color3.fromRGB(68, 255, 136)
         TabInfo.TextColor3 = Color3.fromRGB(0, 0, 0)
     end
+    UpdateCanvas()
 end
 
 TabPlayer.MouseButton1Click:Connect(function() ShowTab("Player") end)
@@ -830,6 +1016,10 @@ local function CleanupAll()
     if espUpdater then task.cancel(espUpdater); espUpdater = nil end
     StopNoclip()
     StopFly()
+    if flyHeartbeat then
+        flyHeartbeat:Disconnect()
+        flyHeartbeat = nil
+    end
     StopAntiAFK()
     for _, func in ipairs(State.CleanupFunctions) do
         pcall(func)
@@ -904,7 +1094,8 @@ LocalPlayer.CharacterAdded:Connect(function(newChar)
     end
     if State.Fly then
         StartFly()
+        StartFlyHeartbeat()
     end
 end)
 
-print("[good]: PutinHub v4.0 – WalkSpeed, JumpPower, Noclip, Anti-AFK, Fly, FlySpeed загружены.")
+print("[good]: PutinHub v4.1 – классический Fly, секции, скролл загружены.")
