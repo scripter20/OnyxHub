@@ -1,26 +1,33 @@
--- ЧАСТЬ 1: ОСНОВНОЙ ИНТЕРФЕЙС (уменьшен, с перетаскиванием)
+-- ЧАСТЬ 1: ОСНОВНОЙ ИНТЕРФЕЙС (фикс перетаскивания, новая позиция)
 local player = game.Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
 
-local function makeDraggable(object)
+local function makeDraggable(object, onClick)
     local dragging = false
     local dragStart = nil
     local startPos = nil
+    local moved = false
+
     object.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
             dragging = true
+            moved = false
             dragStart = input.Position
             startPos = object.Position
         end
     end)
+
     object.InputChanged:Connect(function(input)
         if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
             local delta = input.Position - dragStart
+            if delta.Magnitude > 5 then moved = true end
             object.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
         end
     end)
+
     object.InputEnded:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            if not moved and onClick then onClick() end
             dragging = false
         end
     end)
@@ -35,7 +42,7 @@ hubGui.Parent = playerGui
 local toggleButton = Instance.new("TextButton")
 toggleButton.Name = "ToggleButton"
 toggleButton.Size = UDim2.new(0, 160, 0, 40)
-toggleButton.Position = UDim2.new(0.5, -80, 0, 15)
+toggleButton.Position = UDim2.new(1, -180, 0.4, 0) -- справа, чуть выше середины
 toggleButton.BackgroundColor3 = Color3.fromRGB(25, 25, 30)
 toggleButton.BorderSizePixel = 2
 toggleButton.BorderColor3 = Color3.fromRGB(200, 200, 220)
@@ -47,7 +54,6 @@ local cornerToggle = Instance.new("UICorner")
 cornerToggle.CornerRadius = UDim.new(0, 10)
 cornerToggle.Parent = toggleButton
 toggleButton.Parent = hubGui
-makeDraggable(toggleButton)
 
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "MainFrame"
@@ -62,7 +68,6 @@ local cornerMain = Instance.new("UICorner")
 cornerMain.CornerRadius = UDim.new(0, 14)
 cornerMain.Parent = mainFrame
 mainFrame.Parent = hubGui
-makeDraggable(mainFrame)
 
 local title = Instance.new("TextLabel")
 title.Name = "Title"
@@ -76,25 +81,26 @@ title.Font = Enum.Font.GothamBold
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.Parent = mainFrame
 
-toggleButton.MouseButton1Click:Connect(function()
+-- Передаём функцию открытия/закрытия при клике (без перетаскивания)
+makeDraggable(toggleButton, function()
     mainFrame.Visible = not mainFrame.Visible
 end)
 
 print("[GOOD] Часть 1 загружена. Вставляй часть 2.")
--- ЧАСТЬ 2: КРЕСТ И ПОДТВЕРЖДЕНИЕ ЗАКРЫТИЯ
+-- ЧАСТЬ 2: КРЕСТ (теперь "X") И ПОДТВЕРЖДЕНИЕ
 local closeButton = Instance.new("TextButton")
 closeButton.Name = "CloseButton"
-closeButton.Size = UDim2.new(0, 32, 0, 32)
-closeButton.Position = UDim2.new(1, -40, 0, 8)
+closeButton.Size = UDim2.new(0, 36, 0, 36)
+closeButton.Position = UDim2.new(1, -44, 0, 4)
 closeButton.BackgroundColor3 = Color3.fromRGB(200, 30, 30)
-closeButton.BorderSizePixel = 1
-closeButton.BorderColor3 = Color3.fromRGB(255, 100, 100)
-closeButton.Text = "✕"
+closeButton.BorderSizePixel = 2
+closeButton.BorderColor3 = Color3.fromRGB(255, 120, 120)
+closeButton.Text = "X"
 closeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
 closeButton.TextScaled = true
 closeButton.Font = Enum.Font.GothamBold
 local cornerClose = Instance.new("UICorner")
-cornerClose.CornerRadius = UDim.new(0, 6)
+cornerClose.CornerRadius = UDim.new(0, 8)
 cornerClose.Parent = closeButton
 closeButton.Parent = mainFrame
 
